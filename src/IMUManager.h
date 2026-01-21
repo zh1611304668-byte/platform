@@ -72,10 +72,10 @@ public:
   static constexpr uint32_t AXIS_SELECTION_INTERVAL = 1000; ///< 轴选择间隔(ms)
   /// @}
 
-  /// @name 动态阈值参数
+  /// @name 动态阈值参数 (与Python模拟器完全一致)
   /// @{
   static constexpr float PEAK_ENTER_FACTOR =
-      1.6f; ///< 进入波峰区阈值系数 (factor * std)
+      1.5f; ///< 进入波峰区阈值系数 (factor * std)
   static constexpr float TROUGH_THRESHOLD = -0.02f; ///< 波谷阈值 (g)
   static constexpr float RECOVERY_FACTOR = 1.3f;    ///< 恢复阈值系数
   static constexpr float MIN_PEAK_ABSOLUTE = 0.08f; ///< 波峰最小绝对高度 (g)
@@ -189,7 +189,8 @@ private:
   // 校准状态
   bool _isCalibrating = true;
   bool _calibrationComplete = false;
-  static constexpr int CALIBRATION_SAMPLES = 100; ///< 校准所需样本数
+  static constexpr int CALIBRATION_SAMPLES =
+      100; ///< 校准所需样本数 (100样本@125Hz=0.8秒)
 
   // ==================== Butterworth滤波器 (3Hz) ====================
   float _bw_x1[3] = {0}, _bw_x2[3] = {0};
@@ -225,7 +226,6 @@ private:
   void _initSensor();
   void _selectActiveAxis();
   void _calculateStrokeRate();
-  void _calculateStrokeDistance();
   void _processAccelerationData(float accX, float accY, float accZ);
   double _haversine(double lat1, double lon1, double lat2, double lon2);
   bool _acquireStrokePosition(double &lat, double &lon);

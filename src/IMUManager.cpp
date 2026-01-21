@@ -9,7 +9,8 @@ extern SDCardManager sdCardManager; // 用于调试日志
 
 IMUManager::IMUManager(int sda, int scl, GNSSProcessor *gnss)
     : _sda(sda), _scl(scl), _gnss(gnss), _accX(0), _accY(0), _accZ(0),
-      _dataValid(false), _strokeRate(0.0f), _activeAxis(0), // 初始X轴
+      _dataValid(false), _strokeRate(0.0f),
+      _activeAxis(2), // 固定Z轴（斜放时信号最强）
       _strokeState(STATE_BACKGROUND), _lastStrokeTime(0), _lastAxisSelection(0),
       _strokeCount(0), _totalDistance(0.0f), _lastStrokeCountForDistance(0),
       _sensorFound(false), _prevStrokeLat(0.0), _prevStrokeLon(0.0),
@@ -59,7 +60,6 @@ void IMUManager::update() {
     _processAccelerationData(_accX, _accY, _accZ);
     // _selectActiveAxis();  // DISABLED: 固定X轴，不进行轴切换
     _calculateStrokeRate();
-    _calculateStrokeDistance();
 
     _dataValid = false;
   }
@@ -192,7 +192,7 @@ void IMUManager::_calculateStrokeRate() {
 
       _isCalibrating = false;
       _calibrationComplete = true;
-      Serial.printf("[校准完成] %.2fs: X轴, 均值=%.3fg, 标准差=%.3fg\n",
+      Serial.printf("[校准完成] %.2fs: Z轴, 均值=%.3fg, 标准差=%.3fg\n",
                     millis() / 1000.0f, _backgroundMean, _backgroundStd);
     }
     return; // 校准期间不进行检测
@@ -376,39 +376,6 @@ void IMUManager::_calculateStrokeRate() {
       Serial.println("[超时] 重置状态");
     }
   }
-
-  // 【调试输出】每100ms输出一次IMU数据和检测状态
-  static unsigned long lastDebugPrint = 0;
-  if (now - lastDebugPrint > 100) {
-    lastDebugPrint = now;
-
-    // 获取当前三轴原始数据和滤波后的数据
-    float current_filtered = _accelHistory[_activeAxis].back();
-    float deviation = current_filtered - _backgroundMean;
-
-    const char *stateNames[] = {"背景", "波峰", "波谷", "冷却"};
-
-    Serial.printf(
-        "[IMU] 时间=%.2fs | X轴原始=%.3fg | 滤波=%.3fg | 偏差=%.3fg | "
-        "均值=%.3fg | 标准差=%.3fg | 状态=%s | 桨数=%d | 桨频=%.1f\n",
-        now / 1000.0f,
-        _accX,                    // X轴原始值
-        current_filtered,         // 滤波后的值
-        deviation,                // 相对背景的偏差
-        _backgroundMean,          // 背景均值
-        _backgroundStd,           // 背景标准差
-        stateNames[_strokeState], // 当前状态
-        _strokeCount,             // 累计桨数
-        _strokeRate);             // 当前桨频
-  }
-}
-
-void IMUManager::_calculateStrokeDistance() {
-  // 距离计算逻辑... (如果之前是在这里算的，需要确保与新的事件触发同步)
-  // 简单起见，这里不再赘述旧有的Haversine逻辑，假设它依赖 _hasNewStroke
-  // 标志在外部或 update中调用
-
-  // 之前的逻辑依赖 StrokeMetrics 更新，已在上面处理
 }
 
 // 公共接口保持不变

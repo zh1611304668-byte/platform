@@ -3,9 +3,8 @@
 
 #include "SD_MMC.h"
 #include <Arduino.h>
-#include <ESPAsyncWebServer.h>
+#include <WebServer.h>
 #include <WiFi.h>
-
 
 class WifiTransferManager {
 public:
@@ -13,8 +12,9 @@ public:
   ~WifiTransferManager();
 
   // 生命周期管理
-  bool start(); // 启动WiFi传输模式
-  void stop();  // 停止WiFi传输模式
+  bool start();  // 启动WiFi传输模式
+  void stop();   // 停止WiFi传输模式
+  void update(); // 定期更新和状态检查
   bool isActive() const { return active; }
 
   // WiFi配置
@@ -28,7 +28,7 @@ private:
   String ssid;
   String password;
 
-  AsyncWebServer *server;
+  WebServer *server;
 
   // WiFi设置
   bool setupWiFiAP();
@@ -36,9 +36,9 @@ private:
 
   // Web服务器路由
   void setupWebServer();
-  void handleRoot(AsyncWebServerRequest *request);
-  void handleFileList(AsyncWebServerRequest *request);
-  void handleFileDownload(AsyncWebServerRequest *request);
+  void handleRoot();
+  void handleFileList();
+  void handleFileDownload();
 
   // 辅助函数
   String listDirectory(const String &path);

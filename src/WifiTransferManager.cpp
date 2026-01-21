@@ -1,16 +1,21 @@
 #include "WifiTransferManager.h"
+#include "ConfigManager.h"
 #include <ArduinoJson.h>
+#include <esp_task_wdt.h>
+
+extern ConfigManager configManager;
 
 // WiFi配置常量
-static const char *DEFAULT_SSID = "Rowing_Data_Transfer";
 static const char *DEFAULT_PASSWORD = "12345789";
 static const IPAddress AP_IP(192, 168, 4, 1);
 static const IPAddress AP_GATEWAY(192, 168, 4, 1);
 static const IPAddress AP_SUBNET(255, 255, 255, 0);
 
 WifiTransferManager::WifiTransferManager()
-    : active(false), ssid(DEFAULT_SSID), password(DEFAULT_PASSWORD),
-      server(nullptr) {}
+    : active(false), password(DEFAULT_PASSWORD), server(nullptr) {
+  // SSID将在start()时根据boatCode动态设置
+  ssid = "Rowing_Data"; // 默认值，实际会被覆盖
+}
 
 WifiTransferManager::~WifiTransferManager() { stop(); }
 
@@ -20,7 +25,18 @@ bool WifiTransferManager::start() {
     return true;
   }
 
-  Serial.println("[WiFi传输] 启动WiFi传输模式...");
+  // 从ConfigManager获取船组编号，构建SSID
+  const DeviceConfig &deviceConfig = configManager.getDeviceConfig();
+  if (deviceConfig.isValid && !deviceConfig.boatCode.isEmpty()) {
+    ssid = "Rowing_" + deviceConfig.boatCode;
+    Serial.printf("[WiFi传输] 使用船组编号: %s\n",
+                  deviceConfig.boatCode.c_str());
+  } else {
+    ssid = "Rowing_Data"; // 如果配置未加载，使用默认名称
+    Serial.println("[WiFi传输] 配置未就绪，使用默认SSID");
+  }
+
+  Serial.printf("[WiFi传输] 启动WiFi传输模式: %s\n", ssid.c_str());
 
   // 设置WiFi AP模式
   if (!setupWiFiAP()) {
@@ -29,7 +45,7 @@ bool WifiTransferManager::start() {
   }
 
   // 创建并设置Web服务器
-  server = new AsyncWebServer(80);
+  server = new WebServer(80);
   setupWebServer();
   server->begin();
 
@@ -52,7 +68,7 @@ void WifiTransferManager::stop() {
 
   // 停止Web服务器
   if (server) {
-    server->end();
+    server->stop();
     delete server;
     server = nullptr;
   }
@@ -61,7 +77,24 @@ void WifiTransferManager::stop() {
   teardownWiFi();
 
   active = false;
-  Serial.println("[WiFi传输] WiFi传输模式已停止");
+  Serial.println("[WiFi传输] ✅ WiFi传输模式已停止");
+}
+
+void WifiTransferManager::update() {
+  // 处理Web服务器请求
+  if (active && server) {
+    server->handleClient();
+  }
+
+  // 定期检查WiFi状态（每30秒）
+  static unsigned long lastCheck = 0;
+  unsigned long now = millis();
+
+  if (active && (now - lastCheck > 30000)) {
+    lastCheck = now;
+    int clientCount = WiFi.softAPgetStationNum();
+    Serial.printf("[WiFi传输] 状态检查 - 连接客户端数: %d\n", clientCount);
+  }
 }
 
 String WifiTransferManager::getIPAddress() const {
@@ -72,25 +105,40 @@ String WifiTransferManager::getIPAddress() const {
 }
 
 bool WifiTransferManager::setupWiFiAP() {
-  // 断开所有现有连接
+  // 断开所有现有连接并关闭WiFi
   WiFi.disconnect(true);
+  WiFi.mode(WIFI_OFF);
+  delay(500); // 增加延迟确保完全关闭
+
+  // 设置为AP模式
+  WiFi.mode(WIFI_AP);
   delay(100);
 
   // 配置AP模式
   if (!WiFi.softAPConfig(AP_IP, AP_GATEWAY, AP_SUBNET)) {
-    Serial.println("[WiFi传输] AP配置失败");
+    Serial.println("[WiFi传输] ❌ AP配置失败");
     return false;
   }
 
   // 启动AP（无密码 - 开放网络）
-  if (!WiFi.softAP(ssid.c_str(), NULL, 1, 0, 1)) {
-    Serial.println("[WiFi传输] AP启动失败");
+  // 参数：SSID, 密码, 信道, 隐藏SSID, 最大连接数
+  if (!WiFi.softAP(ssid.c_str(), NULL, 1, 0, 4)) {
+    Serial.println("[WiFi传输] ❌ AP启动失败");
     return false;
   }
 
-  delay(100);
-  Serial.printf("[WiFi传输] AP已启动 - SSID: %s\n", ssid.c_str());
-  Serial.printf("[WiFi传输] IP: %s\n", WiFi.softAPIP().toString().c_str());
+  // 等待AP完全启动
+  delay(500);
+
+  // 验证IP地址
+  IPAddress ip = WiFi.softAPIP();
+  if (ip == IPAddress(0, 0, 0, 0)) {
+    Serial.println("[WiFi传输] ❌ 获取IP地址失败");
+    return false;
+  }
+
+  Serial.printf("[WiFi传输] ✅ AP已启动 - SSID: %s\n", ssid.c_str());
+  Serial.printf("[WiFi传输] ✅ IP: %s\n", ip.toString().c_str());
 
   return true;
 }
@@ -103,297 +151,191 @@ void WifiTransferManager::teardownWiFi() {
 
 void WifiTransferManager::setupWebServer() {
   // 主页 - 文件浏览器UI
-  server->on("/", HTTP_GET, [this](AsyncWebServerRequest *request) {
-    this->handleRoot(request);
-  });
+  server->on("/", [this]() { this->handleRoot(); });
 
   // API: 获取文件列表
-  server->on("/api/list", HTTP_GET, [this](AsyncWebServerRequest *request) {
-    this->handleFileList(request);
-  });
+  server->on("/api/list", [this]() { this->handleFileList(); });
 
   // 文件下载
-  server->on("/download", HTTP_GET, [this](AsyncWebServerRequest *request) {
-    this->handleFileDownload(request);
-  });
+  server->on("/download", [this]() { this->handleFileDownload(); });
 
   // 404处理
-  server->onNotFound([](AsyncWebServerRequest *request) {
-    request->send(404, "text/plain", "Not Found");
-  });
+  server->onNotFound(
+      [this]() { server->send(404, "text/plain", "Not Found"); });
 }
 
-void WifiTransferManager::handleRoot(AsyncWebServerRequest *request) {
-  // 嵌入式HTML UI
-  String html = R"html(
-<!DOCTYPE html>
-<html lang="zh-CN">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>训练数据传输</title>
-  <style>
-    * { margin: 0; padding: 0; box-sizing: border-box; }
-    body {
-      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-      min-height: 100vh;
-      padding: 20px;
-    }
-    .container {
-      max-width: 900px;
-      margin: 0 auto;
-      background: rgba(255, 255, 255, 0.95);
-      border-radius: 20px;
-      padding: 30px;
-      box-shadow: 0 20px 60px rgba(0,0,0,0.3);
-    }
-    h1 {
-      color: #667eea;
-      margin-bottom: 10px;
-      font-size: 2em;
-    }
-    .subtitle {
-      color: #666;
-      margin-bottom: 30px;
-      font-size: 0.9em;
-    }
-    .file-list {
-      background: white;
-      border-radius: 10px;
-      padding: 20px;
-      box-shadow: 0 2px 10px rgba(0,0,0,0.1);
-    }
-    .file-item {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      padding: 15px;
-      border-bottom: 1px solid #eee;
-      transition: background 0.2s;
-    }
-    .file-item:hover {
-      background: #f8f9ff;
-    }
-    .file-item:last-child {
-      border-bottom: none;
-    }
-    .file-info {
-      flex: 1;
-    }
-    .file-name {
-      font-weight: 600;
-      color: #333;
-      margin-bottom: 5px;
-    }
-    .file-meta {
-      font-size: 0.85em;
-      color: #999;
-    }
-    .file-icon {
-      width: 40px;
-      height: 40px;
-      background: linear-gradient(135deg, #667eea, #764ba2);
-      border-radius: 8px;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      color: white;
-      font-weight: bold;
-      margin-right: 15px;
-    }
-    .folder-icon {
-      background: linear-gradient(135deg, #f093fb, #f5576c);
-    }
-    .download-btn {
-      background: linear-gradient(135deg, #667eea, #764ba2);
-      color: white;
-      border: none;
-      padding: 10px 20px;
-      border-radius: 8px;
-      cursor: pointer;
-      font-weight: 600;
-      transition: transform 0.2s, box-shadow 0.2s;
-    }
-    .download-btn:hover {
-      transform: translateY(-2px);
-      box-shadow: 0 5px 15px rgba(102, 126, 234, 0.4);
-    }
-    .loading {
-      text-align: center;
-      padding: 40px;
-      color: #999;
-    }
-    .breadcrumb {
-      display: flex;
-      gap: 5px;
-      margin-bottom: 20px;
-      flex-wrap: wrap;
-    }
-    .breadcrumb-item {
-      color: #667eea;
-      cursor: pointer;
-      padding: 5px 10px;
-      border-radius: 5px;
-      transition: background 0.2s;
-    }
-    .breadcrumb-item:hover {
-      background: #f0f0f0;
-    }
-    .breadcrumb-separator {
-      color: #ccc;
-      padding: 5px;
-    }
-  </style>
-</head>
-<body>
-  <div class="container">
-    <h1>🚣 训练数据传输</h1>
-    <div class="subtitle">浏览和下载SD卡中的训练数据</div>
-    <div class="breadcrumb" id="breadcrumb"></div>
-    <div class="file-list" id="fileList">
-      <div class="loading">正在加载...</div>
-    </div>
-  </div>
-  <script>
-    let currentPath = '/';
-    
-    function loadFiles(path) {
-      currentPath = path;
-      updateBreadcrumb();
-      
-      fetch('/api/list?path=' + encodeURIComponent(path))
-        .then(r => r.json())
-        .then(data => {
-          const list = document.getElementById('fileList');
-          if (data.files.length === 0) {
-            list.innerHTML = '<div class="loading">此目录为空</div>';
-            return;
-          }
-          
-          list.innerHTML = data.files.map(f => `
-            <div class="file-item">
-              <div class="file-icon ${f.isDir ? 'folder-icon' : ''}">${f.isDir ? '📁' : '📄'}</div>
-              <div class="file-info">
-                <div class="file-name">${f.name}</div>
-                <div class="file-meta">${f.isDir ? '文件夹' : formatSize(f.size)}</div>
-              </div>
-              ${f.isDir ? 
-                `<button class="download-btn" onclick="loadFiles('${f.path}')">打开</button>` :
-                `<button class="download-btn" onclick="downloadFile('${f.path}')">下载</button>`
-              }
-            </div>
-          `).join('');
-        })
-        .catch(err => {
-          document.getElementById('fileList').innerHTML = '<div class="loading">加载失败</div>';
-        });
-    }
-    
-    function updateBreadcrumb() {
-      const parts = currentPath.split('/').filter(p => p);
-      const bc = document.getElementById('breadcrumb');
-      
-      let html = '<span class="breadcrumb-item" onclick="loadFiles(\'/\')">根目录</span>';
-      let accPath = '';
-      
-      parts.forEach((part, i) => {
-        accPath += '/' + part;
-        const pathCopy = accPath;
-        html += '<span class="breadcrumb-separator">/</span>';
-        html += `<span class="breadcrumb-item" onclick="loadFiles('${pathCopy}')">${part}</span>`;
-      });
-      
-      bc.innerHTML = html;
-    }
-    
-    function downloadFile(path) {
-      window.location.href = '/download?file=' + encodeURIComponent(path);
-    }
-    
-    function formatSize(bytes) {
-      if (bytes < 1024) return bytes + ' B';
-      if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
-      if (bytes < 1024 * 1024 * 1024) return (bytes / 1024 / 1024).toFixed(1) + ' MB';
-      return (bytes / 1024 / 1024 / 1024).toFixed(1) + ' GB';
-    }
-    
-    loadFiles('/');
-  </script>
-</body>
-</html>
-  )html";
+void WifiTransferManager::handleRoot() {
+  // 简化HTML避免内存问题，添加下载进度显示
+  const char *html =
+      "<!DOCTYPE html><html><head><meta charset='UTF-8'><meta name='viewport' "
+      "content='width=device-width,initial-scale=1'><title>"
+      "\xE6\x95\xB0\xE6\x8D\xAE\xE4\xBC\xA0\xE8\xBE\x93</"
+      "title><style>body{font-family:Arial;margin:20px;background:#f5f5f5}.c{"
+      "max-width:900px;margin:0 "
+      "auto;background:#fff;padding:20px;border-radius:8px}h1{color:#333;"
+      "margin:0 0 "
+      "20px}.i{display:flex;justify-content:space-between;padding:12px;border-"
+      "bottom:1px solid "
+      "#eee}.n{font-weight:bold}.m{color:#999;font-size:.9em}.b{background:#"
+      "007bff;color:#fff;border:none;padding:8px "
+      "16px;border-radius:4px;cursor:pointer;text-decoration:none;transition:"
+      "background "
+      ".2s}.b:hover{background:#0056b3}.b:disabled{background:#ccc;cursor:not-"
+      "allowed}.l{text-align:center;padding:20px;color:#999}.prog{position:"
+      "fixed;bottom:20px;right:20px;background:rgba(0,0,0,.8);color:#fff;"
+      "padding:15px "
+      "20px;border-radius:8px;display:none;min-width:250px}.prog-bar{"
+      "background:#444;height:6px;border-radius:3px;margin:10px "
+      "0;overflow:hidden}.prog-fill{background:#4CAF50;height:100%;transition:"
+      "width .3s}</style></head><body><div class='c'><h1>\xF0\x9F\x9A\xA3 "
+      "\xE6\x95\xB0\xE6\x8D\xAE\xE4\xBC\xA0\xE8\xBE\x93</h1><div id='d'><div "
+      "class='l'>\xE5\x8A\xA0\xE8\xBD\xBD...</div></div></div><div "
+      "class='prog' id='prog'><div "
+      "id='prog-text'>\xE4\xB8\x8B\xE8\xBD\xBD\xE4\xB8\xAD...</div><div "
+      "class='prog-bar'><div class='prog-fill' id='prog-fill'></div></div><div "
+      "id='prog-pct'>0%</div></div><script>let downloading=false;function "
+      "load(p){fetch('/api/"
+      "list?path='+encodeURIComponent(p)).then(r=>r.json()).then(d=>{let "
+      "h='';if(!d.files||!d.files.length)h='<div "
+      "class=\"l\">\xE7\xA9\xBA</div>';else d.files.forEach(f=>{h+='<div "
+      "class=\"i\"><div><div class=\"n\">'+(f.isDir?'\xF0\x9F\x93\x81 "
+      "':'\xF0\x9F\x93\x84 ')+f.name+'</div><div "
+      "class=\"m\">'+(f.isDir?'\xE6\x96\x87\xE4\xBB\xB6\xE5\xA4\xB9':sz(f.size)"
+      ")+'</div></div>';h+=f.isDir?'<button class=\"b\" "
+      "onclick=\"load(\\''+f.path+'\\')\">\xE6\x89\x93\xE5\xBC\x80</"
+      "button>':'<button class=\"b\" "
+      "onclick=\"dl(\\''+f.path+'\\',\\''+f.name+'\\','+f.size+')\">"
+      "\xE4\xB8\x8B\xE8\xBD\xBD</button>';h+='</"
+      "div>'});document.getElementById('d').innerHTML=h}).catch(()=>document."
+      "getElementById('d').innerHTML='<div "
+      "class=\"l\">\xE5\xA4\xB1\xE8\xB4\xA5</div>')}function sz(b){return "
+      "b<1024?b+' B':b<1048576?(b/1024).toFixed(1)+' "
+      "KB':b<1073741824?(b/1048576).toFixed(1)+' "
+      "MB':(b/1073741824).toFixed(1)+' GB'}function "
+      "dl(path,name,size){if(downloading)return;downloading=true;const "
+      "prog=document.getElementById('prog');const "
+      "fill=document.getElementById('prog-fill');const "
+      "pct=document.getElementById('prog-pct');const "
+      "txt=document.getElementById('prog-text');prog.style.display='block';txt."
+      "textContent='\xE4\xB8\x8B\xE8\xBD\xBD: '+name;let loaded=0;const "
+      "xhr=new "
+      "XMLHttpRequest();xhr.open('GET','/"
+      "download?file='+encodeURIComponent(path),true);xhr.responseType='blob';"
+      "xhr.onprogress=e=>{if(e.lengthComputable){loaded=e.loaded;const "
+      "p=Math.round(e.loaded/"
+      "e.total*100);fill.style.width=p+'%';pct.textContent=p+'% "
+      "('+sz(e.loaded)+' / "
+      "'+sz(e.total)+')'}};xhr.onload=()=>{if(xhr.status===200){const "
+      "blob=xhr.response;const url=window.URL.createObjectURL(blob);const "
+      "a=document.createElement('a');a.href=url;a.download=name;a.click();"
+      "window.URL.revokeObjectURL(url);txt.textContent='"
+      "\xE5\xAE\x8C\xE6\x88\x90!';setTimeout(()=>{prog.style.display='none';"
+      "downloading=false;fill.style.width='0';pct.textContent='0%'},2000)}else{"
+      "txt.textContent='\xE5\xA4\xB1\xE8\xB4\xA5: "
+      "'+xhr.status;setTimeout(()=>{prog.style.display='none';downloading="
+      "false},3000)}};xhr.onerror=()=>{txt.textContent='"
+      "\xE7\xBD\x91\xE7\xBB\x9C\xE9\x94\x99\xE8\xAF\xAF';setTimeout(()=>{prog."
+      "style.display='none';downloading=false},3000)};xhr.send()}load('/')</"
+      "script></body></html>";
 
-  request->send(200, "text/html", html);
+  server->send(200, "text/html", html);
 }
 
-void WifiTransferManager::handleFileList(AsyncWebServerRequest *request) {
+void WifiTransferManager::handleFileList() {
   String path = "/";
-  if (request->hasParam("path")) {
-    path = request->getParam("path")->value();
+  if (server->hasArg("path")) {
+    path = server->arg("path");
   }
 
   // 验证路径安全性
   if (!isValidPath(path)) {
-    request->send(400, "application/json", "{\"error\":\"Invalid path\"}");
+    server->send(400, "application/json", "{\"error\":\"Invalid path\"}");
     return;
   }
 
   String jsonList = listDirectory(path);
-  request->send(200, "application/json", jsonList);
+  server->send(200, "application/json", jsonList);
 }
 
-void WifiTransferManager::handleFileDownload(AsyncWebServerRequest *request) {
-  if (!request->hasParam("file")) {
-    request->send(400, "text/plain", "Missing file parameter");
+void WifiTransferManager::handleFileDownload() {
+  if (!server->hasArg("file")) {
+    server->send(400, "text/plain", "Missing file parameter");
     return;
   }
 
-  String filePath = request->getParam("file")->value();
+  String filePath = server->arg("file");
+
+  Serial.printf("[WiFi传输] 下载请求: %s\n", filePath.c_str());
 
   // 验证路径安全性
   if (!isValidPath(filePath)) {
-    request->send(400, "text/plain", "Invalid file path");
+    Serial.println("[WiFi传输] ❌ 无效的文件路径");
+    server->send(400, "text/plain", "Invalid file path");
     return;
   }
 
   // 检查文件是否存在
   if (!SD_MMC.exists(filePath.c_str())) {
-    request->send(404, "text/plain", "File not found");
+    Serial.println("[WiFi传输] ❌ 文件不存在");
+    server->send(404, "text/plain", "File not found");
     return;
   }
 
-  // 流式传输文件
+  // 打开文件
   File file = SD_MMC.open(filePath.c_str(), FILE_READ);
-  if (!file || file.isDirectory()) {
-    request->send(500, "text/plain", "Cannot open file");
-    if (file)
-      file.close();
+  if (!file) {
+    Serial.println("[WiFi传输] ❌ 无法打开文件");
+    server->send(500, "text/plain", "Cannot open file");
+    return;
+  }
+
+  if (file.isDirectory()) {
+    Serial.println("[WiFi传输] ❌ 不能下载目录");
+    file.close();
+    server->send(500, "text/plain", "Cannot download directory");
     return;
   }
 
   String contentType = getContentType(filePath);
   String fileName = filePath.substring(filePath.lastIndexOf('/') + 1);
 
-  AsyncWebServerResponse *response = request->beginResponse(
-      contentType, file.size(),
-      [file](uint8_t *buffer, size_t maxLen, size_t index) mutable -> size_t {
-        if (!file)
-          return 0;
-        size_t bytesRead = file.read(buffer, maxLen);
-        if (bytesRead == 0 || !file.available()) {
-          file.close();
-        }
-        return bytesRead;
-      });
+  Serial.printf("[WiFi传输] ✅ 开始传输: %s (%.2f KB)\n", fileName.c_str(),
+                file.size() / 1024.0);
 
-  response->addHeader("Content-Disposition",
-                      "attachment; filename=\"" + fileName + "\"");
-  request->send(response);
+  // 发送响应头
+  server->setContentLength(file.size());
+  server->sendHeader("Content-Type", contentType);
+  server->sendHeader("Content-Disposition",
+                     "attachment; filename=\"" + fileName + "\"");
+  server->sendHeader("Cache-Control", "no-cache");
+  server->send(200);
+
+  // 手动分块传输，每次重置看门狗
+  const size_t CHUNK_SIZE = 1024; // 1KB chunks
+  uint8_t buffer[CHUNK_SIZE];
+  size_t totalSent = 0;
+
+  while (file.available()) {
+    size_t bytesRead = file.read(buffer, CHUNK_SIZE);
+    if (bytesRead > 0) {
+      server->client().write(buffer, bytesRead);
+      totalSent += bytesRead;
+
+      // 每4KB重置一次看门狗
+      if (totalSent % 4096 == 0) {
+        esp_task_wdt_reset();
+        yield();
+      }
+    }
+  }
+
+  file.close();
+  Serial.printf("[WiFi传输] ✅ 传输完成: %d bytes\n", totalSent);
 }
 
 String WifiTransferManager::listDirectory(const String &path) {
-  StaticJsonDocument<4096> doc;
+  // 使用更大的缓冲区以支持更多文件
+  StaticJsonDocument<8192> doc;
   JsonArray filesArray = doc.createNestedArray("files");
 
   File root = SD_MMC.open(path.c_str());
@@ -401,15 +343,20 @@ String WifiTransferManager::listDirectory(const String &path) {
     doc["error"] = "Cannot open directory";
     String output;
     serializeJson(doc, output);
+    root.close();
     return output;
   }
 
+  // 限制文件数量以防止内存溢出
+  const int MAX_FILES = 100;
+  int fileCount = 0;
+
   File file = root.openNextFile();
-  while (file) {
+  while (file && fileCount < MAX_FILES) {
     JsonObject fileObj = filesArray.createNestedObject();
     String fileName = String(file.name());
 
-    // 获取相对路径
+    // 获取完整路径
     String fullPath = file.path();
 
     fileObj["name"] = fileName;
@@ -417,9 +364,23 @@ String WifiTransferManager::listDirectory(const String &path) {
     fileObj["isDir"] = file.isDirectory();
     fileObj["size"] = file.isDirectory() ? 0 : file.size();
 
+    file.close();
     file = root.openNextFile();
+    fileCount++;
+
+    // 允许其他任务运行
+    yield();
+  }
+
+  if (file) {
+    file.close();
   }
   root.close();
+
+  // 如果达到文件数量限制，添加警告
+  if (fileCount >= MAX_FILES) {
+    doc["warning"] = "Directory contains more files than can be displayed";
+  }
 
   String output;
   serializeJson(doc, output);

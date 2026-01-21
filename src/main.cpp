@@ -411,13 +411,7 @@ void setup() {
     Serial.println("SD Card initialization failed.");
   }
 
-  if (!training.isActive()) {
-    if (wifiTransfer.start()) {
-      Serial.println("[MAIN] WiFi transfer started (idle mode).");
-    } else {
-      Serial.println("[MAIN] WiFi transfer failed to start.");
-    }
-  }
+  // WiFi传输将在网络任务完成后启动（以使用船组编号）
 
   updatePanel1();
   updatePanel8();
@@ -449,10 +443,7 @@ void setup() {
 
   optimizeTaskPriorities();
 
-  // 【临时测试】开机自动启动WiFi - 方便测试
-  delay(2000); // 等待系统稳定
-  wifiTransfer.start();
-  Serial.println("[DEBUG] WiFi已在开机时自动启动，用于测试");
+  // WiFi将在网络任务完成后自动启动
 
   boot_auto_once_done = false;
   boot_auto_once_stage = 0;
@@ -474,7 +465,9 @@ void loop() {
 
   // High frequency sensor update
   imu.update();
-
+  if (wifiTransfer.isActive()) {
+    wifiTransfer.update();
+  }
   esp_task_wdt_reset();
 
   static unsigned long lastLogTime = 0;
@@ -1599,6 +1592,15 @@ void networkInitTask(void *pvParameters) {
       }
     } else {
       Serial.println("[网络任务] MQTT配置未就绪，跳过MQTT任务创建");
+    }
+
+    // 启动WiFi传输（此时配置已加载，可使用船组编号）
+    if (!training.isActive() && !wifiTransfer.isActive()) {
+      if (wifiTransfer.start()) {
+        Serial.println("[WiFi传输] ✅ 已自动启动（使用船组编号）");
+      } else {
+        Serial.println("[WiFi传输] ❌ 启动失败");
+      }
     }
 
     networkTaskCompleted = true;

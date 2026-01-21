@@ -102,14 +102,14 @@ class RealtimeStrokeDetector:
 
         
         # 动态阈值系数 (相对于背景标准差)
-        self.PEAK_ENTER_FACTOR = 1.6   # 进入波峰区的阈值 = mean + factor * std (降低以提高灵敏度)
+        self.PEAK_ENTER_FACTOR = 1.5   # 进入波峰区的阈值 = mean + factor * std (与C++固件一致)
         self.PEAK_EXIT_FACTOR = 0.5    # 离开波峰区(进入波谷)的阈值
-        self.TROUGH_THRESHOLD = -0.02  # 绝对波谷阈值(低于均值多少算波谷区, 降低)
-        self.RECOVERY_FACTOR = 1.3     # 恢复到背景的阈值 (增加以减少噪声干扰)
+        self.TROUGH_THRESHOLD = -0.02  # 绝对波谷阈值(低于均值多少算波谷区)
+        self.RECOVERY_FACTOR = 1.3     # 恢复到背景的阈值
         
-        # 绝对阈值(防止噪声过小时误触发)
-        self.MIN_PEAK_ABSOLUTE = 0.06 # 波峰最小绝对高度 (匹配固件)
-        self.MIN_AMPLITUDE = 0.05   # 最小峰谷振幅 (匹配固件)
+        # 绝对阈值(防止噪声过小时误触发) - 与C++固件完全一致
+        self.MIN_PEAK_ABSOLUTE = 0.08 # 波峰最小绝对高度 (g)
+        self.MIN_AMPLITUDE = 0.05   # 最小峰谷振幅 (g)
         
         # 时间参数
         self.MIN_PEAK_DURATION = 30    # 波峰区最小持续时间(ms) - 降低
@@ -121,14 +121,14 @@ class RealtimeStrokeDetector:
         
         # ============ 双重滤波器 ============
         # 第一级: Butterworth低通 (3Hz截止, 快速响应)
-        self.filters = [ButterworthFilter(cutoff_hz=3.0, sample_rate=100.0) for _ in range(3)]
+        self.filters = [ButterworthFilter(cutoff_hz=3.0, sample_rate=125.0) for _ in range(3)]
         # 第二级: EMA平滑 (alpha=0.5, 快速响应)
         self.ema_filters = [ExponentialMovingAverage(alpha=0.25) for _ in range(3)]
         
 
         # ============ 状态变量 ============
         self._accelHistory = [deque(maxlen=self.WINDOW_SIZE) for _ in range(3)]
-        self._activeAxis = 1  # 固定Y轴
+        self._activeAxis = 2  # 固定Z轴（斜放时信号最强）
 
         self._strokeState = self.STATE_BACKGROUND
         self._strokeCount = 0
@@ -168,8 +168,8 @@ class RealtimeStrokeDetector:
         self._lastAxisSelection = 0
         
         # ============ 初始化阶段 ============
-        # 使用前0.3秒(30个样本@100Hz)作为静止期，快速建立背景统计
-        self.CALIBRATION_SAMPLES = 30  # 校准期样本数（缩短以检测早期划桨）
+        # 使用前0.8秒(100个样本@125Hz)作为静止期，快速建立背景统计
+        self.CALIBRATION_SAMPLES = 100  # 校准期样本数（与C++固件一致）
         self._isCalibrating = True       # 是否处于校准阶段
         self._calibrationComplete = False
         
@@ -249,11 +249,11 @@ class RealtimeStrokeDetector:
                 self._calibrationComplete = True
                 
                 if self.DEBUG:
-                    print(f"[校准完成] {timestamp_ms/1000:.2f}s: Y轴")
+                    print(f"[校准完成] {timestamp_ms/1000:.2f}s: Z轴")
                     print(f"           均值={self._backgroundMean:.3f}g, 标准差={self._backgroundStd:.3f}g")
             return None  # 校准期间不进行检测
         
-        # 固定Y轴，不进行轴切换
+        # 固定Z轴，不进行轴切换
         # self._check_active_axis(timestamp_ms)  # 已禁用
         
         # 确保至少有20个样本才开始检测（滤波器稳定）
@@ -458,6 +458,9 @@ class RealtimeSimulatorUI(QMainWindow):
         self.ui_update_interval = 1  # UI更新间隔（帧数）
         self.ui_update_counter = 0   # UI更新计数器
         
+        # 自动跟踪模式
+        self.auto_tracking = True  # 默认启用自动跟踪
+        
         self.init_ui()
         
     def init_ui(self):
@@ -505,6 +508,15 @@ class RealtimeSimulatorUI(QMainWindow):
             self.speed_buttons.append((speed, btn))
         
         control_layout.addStretch()
+        
+        # 自动跟踪开关
+        self.tracking_btn = QPushButton("👁 跟踪")
+        self.tracking_btn.setCheckable(True)
+        self.tracking_btn.setChecked(True)
+        self.tracking_btn.setStyleSheet("background-color: #4CAF50; color: white; font-weight: bold;")
+        self.tracking_btn.clicked.connect(self.toggle_tracking)
+        control_layout.addWidget(self.tracking_btn)
+        
         control_group.setLayout(control_layout)
         layout.addWidget(control_group)
         
@@ -603,7 +615,7 @@ class RealtimeSimulatorUI(QMainWindow):
         self.plot_widget.setLabel('left', 'Acceleration (g)')
         self.plot_widget.setLabel('bottom', 'Time (s)')
         self.plot_widget.showGrid(x=True, y=True, alpha=0.3)
-        self.plot_widget.setYRange(-0.5, 0.5)  # 固定Y轴范围，适合划桨加速度尺度
+        self.plot_widget.setYRange(-1.0, 1.0)  # 初始范围，会动态调整
         self.plot_widget.enableAutoRange(axis='y', enable=False)  # 禁用Y轴自动缩放
         
 
@@ -645,6 +657,9 @@ class RealtimeSimulatorUI(QMainWindow):
         
         layout.addWidget(self.plot_widget)
         
+        # 监听图表的视图变化（用户拖动时禁用跟踪）
+        self.plot_widget.sigRangeChanged.connect(self.on_view_changed)
+        
         # 定时器
         self.timer = QTimer()
         self.timer.timeout.connect(self.update_frame)
@@ -678,6 +693,30 @@ class RealtimeSimulatorUI(QMainWindow):
             self.timer.setInterval(interval)
         
 
+    
+    def toggle_tracking(self):
+        """切换自动跟踪模式"""
+        self.auto_tracking = self.tracking_btn.isChecked()
+        if self.auto_tracking:
+            self.tracking_btn.setStyleSheet("background-color: #4CAF50; color: white; font-weight: bold;")
+            self.tracking_btn.setText("👁 跟踪")
+        else:
+            self.tracking_btn.setStyleSheet("")
+            self.tracking_btn.setText("❌ 跟踪")
+    
+    def on_view_changed(self):
+        """视图变化时的回调（用户手动拖动时禁用自动跟踪）"""
+        # 如果当前正在自动更新，则忽略（避免循环触发）
+        if hasattr(self, '_updating_view') and self._updating_view:
+            return
+        
+        # 用户手动拖动，禁用自动跟踪
+        if self.auto_tracking:
+            self.auto_tracking = False
+            self.tracking_btn.setChecked(False)
+            self.tracking_btn.setStyleSheet("")
+            self.tracking_btn.setText("❌ 跟踪")
+    
     def load_data(self):
         file, _ = QFileDialog.getOpenFileName(self, "选择CSV", "", "CSV (*.csv)")
         if not file:
@@ -707,7 +746,7 @@ class RealtimeSimulatorUI(QMainWindow):
             }
             print(f"加载数据: {len(self.timestamps)} 样本")
             print(f"时间范围: {self.timestamps[0]:.1f}ms - {self.timestamps[-1]:.1f}ms")
-            print(f"采样率: ~{1000/np.mean(np.diff(self.timestamps)):.1f} Hz")
+            print(f"采样率: ~{1000/np.mean(np.diff(self.timestamps)):.1f} Hz (算法设计为125Hz)")
         else:
             QMessageBox.warning(self, "错误", "CSV需要包含 timestamp, acc_x, acc_y, acc_z 列")
             return
@@ -857,38 +896,59 @@ class RealtimeSimulatorUI(QMainWindow):
         # ============ 绘制波形 ============
         filtered_hist = self.detector.filtered_data_history
         if len(filtered_hist['t']) > 0:
-            # 获取最近的滤波数据窗口
-            window_size = 1000  # 10秒
-            data_len = len(filtered_hist['t'])
-            start_idx = max(0, data_len - window_size)
-            
-            t_window = filtered_hist['t'][start_idx:]
+            # 显示所有历史数据（不再是滑动窗口）
+            t_all = filtered_hist['t']
             axis_key = ['x', 'y', 'z'][self.detector._activeAxis]
-            y_window = filtered_hist[axis_key][start_idx:]
+            y_all = filtered_hist[axis_key]
             
-            if len(t_window) > 0:
-                self.curve.setData(t_window, y_window)
-        
-            # 绘制检测到的波峰和波谷 (只显示窗口内的)
-            if self.detector.detected_strokes and len(t_window) > 0:
-                min_t = t_window[0]
-                max_t = t_window[-1]
+            if len(t_all) > 0:
+                # 设置标志，避免触发on_view_changed
+                self._updating_view = True
+                
+                self.curve.setData(t_all, y_all)
+                
+                # 自动跟踪模式：调整X轴显示最后10秒
+                if self.auto_tracking and len(t_all) > 1:
+                    latest_time = t_all[-1]
+                    self.plot_widget.setXRange(max(0, latest_time - 10), latest_time + 0.5, padding=0)
+                
+                # 动态调整Y轴范围（确保包含所有数据）
+                if len(y_all) > 0:
+                    y_min = float(min(y_all))
+                    y_max = float(max(y_all))
+                    y_range = y_max - y_min
+                    
+                    # 如果范围太小，使用默认范围
+                    if y_range < 0.1:
+                        y_center = (y_min + y_max) / 2
+                        self.plot_widget.setYRange(y_center - 0.5, y_center + 0.5, padding=0)
+                    else:
+                        # 添加10%边距
+                        margin = y_range * 0.1
+                        self.plot_widget.setYRange(y_min - margin, y_max + margin, padding=0)
+                
+                self._updating_view = False
+            
+            # 绘制检测到的波峰和波谷 （显示所有）
+            if self.detector.detected_strokes:
                 
                 # 过滤波峰 - 使用滤波后的值用于标记
-                visible_peaks = [(s['peak_time'], s.get('peak_filtered', s['peak_raw'])) for s in self.detector.detected_strokes 
-                               if min_t <= s['peak_time'] <= max_t]
+                visible_peaks = [(s['peak_time'], s.get('peak_filtered', s['peak_raw'])) for s in self.detector.detected_strokes]
                 if visible_peaks:
                     p_t, p_v = zip(*visible_peaks)
+                    self._updating_view = True
                     self.peak_scatter.setData(p_t, p_v)
+                    self._updating_view = False
                 else:
                     self.peak_scatter.clear()
                 
                 # 过滤波谷 - 使用滤波后的值用于标记
-                visible_troughs = [(s['trough_time'], s.get('trough_filtered', s['trough_raw'])) for s in self.detector.detected_strokes 
-                                 if min_t <= s['trough_time'] <= max_t]
+                visible_troughs = [(s['trough_time'], s.get('trough_filtered', s['trough_raw'])) for s in self.detector.detected_strokes]
                 if visible_troughs:
                     t_t, t_v = zip(*visible_troughs)
+                    self._updating_view = True
                     self.trough_scatter.setData(t_t, t_v)
+                    self._updating_view = False
                 else:
                     self.trough_scatter.clear()
                 
@@ -898,22 +958,20 @@ class RealtimeSimulatorUI(QMainWindow):
                     self.plot_widget.removeItem(region)
                 self.stroke_regions.clear()
                 
-                # 添加可见窗口内的划桨周期背景
+                # 添加划桨周期背景 (显示所有)
                 for stroke in self.detector.detected_strokes:
                     start_t = stroke.get('stroke_start_time', stroke['peak_time'] - 0.3)
                     end_t = stroke.get('stroke_end_time', stroke['trough_time'] + 0.2)
                     
-                    # 确保在可见窗口内
-                    if end_t >= min_t and start_t <= max_t:
-                        region = pg.LinearRegionItem(
-                            values=[max(start_t, min_t), min(end_t, max_t)],
-                            brush=pg.mkBrush(100, 149, 237, 50),  # 淡蓝色半透明
-                            pen=pg.mkPen(None),  # 无边框
-                            movable=False
-                        )
-                        region.setZValue(-10)  # 放到最底层
-                        self.plot_widget.addItem(region)
-                        self.stroke_regions.append(region)
+                    region = pg.LinearRegionItem(
+                        values=[start_t, end_t],
+                        brush=pg.mkBrush(100, 149, 237, 50),  # 淡蓝色半透明
+                        pen=pg.mkPen(None),  # 无边框
+                        movable=False
+                    )
+                    region.setZValue(-10)  # 放到最底层
+                    self.plot_widget.addItem(region)
+                    self.stroke_regions.append(region)
         
     
 
