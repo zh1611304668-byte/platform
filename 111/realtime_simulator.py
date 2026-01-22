@@ -120,9 +120,12 @@ class RealtimeStrokeDetector:
         self.DEBUG = True
         
         # ============ 双重滤波器 ============
-        # 第一级: Butterworth低通 (3Hz截止, 快速响应)
-        self.filters = [ButterworthFilter(cutoff_hz=3.0, sample_rate=125.0) for _ in range(3)]
-        # 第二级: EMA平滑 (alpha=0.5, 快速响应)
+        # 注意：滤波器参数会在load_data()时根据实际采样率重新初始化
+        # 第一级: Butterworth低通 (3Hz截止)
+        self.cutoff_hz = 3.0  # 截止频率
+        self.sample_rate = 125.0  # 默认采样率，会在加载数据时更新
+        self.filters = [ButterworthFilter(cutoff_hz=self.cutoff_hz, sample_rate=self.sample_rate) for _ in range(3)]
+        # 第二级: EMA平滑 (alpha=0.25)
         self.ema_filters = [ExponentialMovingAverage(alpha=0.25) for _ in range(3)]
         
 
@@ -746,7 +749,30 @@ class RealtimeSimulatorUI(QMainWindow):
             }
             print(f"加载数据: {len(self.timestamps)} 样本")
             print(f"时间范围: {self.timestamps[0]:.1f}ms - {self.timestamps[-1]:.1f}ms")
-            print(f"采样率: ~{1000/np.mean(np.diff(self.timestamps)):.1f} Hz (算法设计为125Hz)")
+            
+            # 计算实际采样率
+            actual_sample_rate = 1000 / np.mean(np.diff(self.timestamps))
+            print(f"采样率: ~{actual_sample_rate:.1f} Hz")
+            
+            # ⚠️ 关键修复：根据实际采样率调整截止频率
+            # Nyquist定理：截止频率必须 < 采样率/2
+            # 对于低采样率数据，需要降低截止频率
+            nyquist = actual_sample_rate / 2
+            optimal_cutoff = min(3.0, nyquist * 0.15)  # 不超过Nyquist频率的15%
+            
+            if abs(actual_sample_rate - 125.0) > 10:  # 如果采样率差异超过10Hz
+                print(f"[警告] 实际采样率({actual_sample_rate:.1f}Hz)与设计采样率(125Hz)差异较大")
+                print(f"       Nyquist频率={nyquist:.1f}Hz, 最优截止频率={optimal_cutoff:.2f}Hz")
+                print(f"       正在根据实际采样率重新初始化Butterworth滤波器...")
+                self.detector.sample_rate = actual_sample_rate
+                self.detector.cutoff_hz = optimal_cutoff
+                self.detector.filters = [
+                    ButterworthFilter(cutoff_hz=optimal_cutoff, sample_rate=actual_sample_rate) 
+                    for _ in range(3)
+                ]
+                print(f"       ✅ 滤波器已更新: cutoff={optimal_cutoff:.2f}Hz, fs={actual_sample_rate:.1f}Hz")
+            else:
+                print(f"       采样率接近设计值，使用默认滤波器: cutoff=3.0Hz, fs=125Hz")
         else:
             QMessageBox.warning(self, "错误", "CSV需要包含 timestamp, acc_x, acc_y, acc_z 列")
             return
