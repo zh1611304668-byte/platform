@@ -189,7 +189,7 @@ const unsigned long debounce_delay = 30;
 bool trainingActive = false;
 unsigned long k4PressTime = 0;
 bool k4ToggledThisPress = false;
-const unsigned long trainingLongPress = 3000;
+const unsigned long trainingLongPress = 2000;
 bool k4PressedInScreen1 = false;
 bool k4IsPressed = false;
 

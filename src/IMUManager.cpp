@@ -11,9 +11,9 @@ IMUManager::IMUManager(int sda, int scl, GNSSProcessor *gnss)
     : _sda(sda), _scl(scl), _gnss(gnss), _accX(0), _accY(0), _accZ(0),
       _dataValid(false), _strokeRate(0.0f),
       _activeAxis(2), // 固定Z轴（斜放时信号最强）
-      _strokeState(STATE_BACKGROUND), _lastStrokeTime(0), _lastAxisSelection(0),
-      _strokeCount(0), _totalDistance(0.0f), _lastStrokeCountForDistance(0),
-      _sensorFound(false), _prevStrokeLat(0.0), _prevStrokeLon(0.0),
+      _strokeState(STATE_BACKGROUND), _lastStrokeTime(0), _strokeCount(0),
+      _totalDistance(0.0f), _lastStrokeCountForDistance(0), _sensorFound(false),
+      _prevStrokeLat(0.0), _prevStrokeLon(0.0),
       _hasInitialStrokePosition(false), _lastValidGnssLat(0.0),
       _lastValidGnssLon(0.0), _phaseStartTime(0), _peakMaxValue(0.0f),
       _peakMaxTime(0), _peakMaxFiltered(0.0f), _troughMinValue(0.0f),
@@ -105,74 +105,9 @@ void IMUManager::_processAccelerationData(float accX, float accY, float accZ) {
   }
 }
 
-void IMUManager::_selectActiveAxis() {
-  uint32_t now = millis();
-
-  // 快速初始检查逻辑：如果还没选过(初始化为0)，则100ms后就检查，否则每1000ms
-  uint32_t interval = (_lastAxisSelection == 0) ? 100 : AXIS_SELECTION_INTERVAL;
-
-  if (now - _lastAxisSelection < interval) {
-    return;
-  }
-  _lastAxisSelection = now;
-
-  float std_devs[3] = {0.0f, 0.0f, 0.0f};
-
-  for (int i = 0; i < 3; ++i) {
-    if (_accelHistory[i].size() < 10)
-      continue;
-
-    // 计算均值
-    float sum = 0.0f;
-    for (float val : _accelHistory[i]) {
-      sum += val;
-    }
-    float mean = sum / _accelHistory[i].size();
-
-    // 计算标准差
-    float sum_sq_diff = 0.0f;
-    for (float val : _accelHistory[i]) {
-      sum_sq_diff += (val - mean) * (val - mean);
-    }
-
-    // 样本标准差 (N-1)
-    if (_accelHistory[i].size() > 1) {
-      std_devs[i] = sqrt(sum_sq_diff / (_accelHistory[i].size() - 1));
-    }
-  }
-
-  // 3. 选择标准差最大的轴
-  int max_dev_axis = 0;
-  if (std_devs[1] > std_devs[max_dev_axis])
-    max_dev_axis = 1;
-  if (std_devs[2] > std_devs[max_dev_axis])
-    max_dev_axis = 2;
-
-  // 4. 迟滞切换逻辑
-  bool switch_needed = false;
-  if (max_dev_axis != _activeAxis) {
-    float max_std = std_devs[max_dev_axis];
-    float current_std = std_devs[_activeAxis];
-    // 噪声门限 > 0.05g 且 新轴比旧轴强 20%
-    if (max_std > 0.05f && max_std > current_std * 1.2f) {
-      switch_needed = true;
-    }
-  }
-
-  if (switch_needed) {
-    Serial.printf("[IMU] 轴切换: %d -> %d (Std: %.3f, %.3f, %.3f)\n",
-                  _activeAxis, max_dev_axis, std_devs[0], std_devs[1],
-                  std_devs[2]);
-    _activeAxis = max_dev_axis;
-    _strokeState = STATE_BACKGROUND; // 切换轴后重置状态机
-    _recoveryCounter = 0;
-  }
-}
-
 void IMUManager::_calculateStrokeRate() {
   // ============ 校准阶段 ============
   if (_isCalibrating) {
-    // 收集前30个样本用于建立初始背景统计（固定Y轴）
     if (_accelHistory[_activeAxis].size() >= CALIBRATION_SAMPLES) {
       // 计算初始背景统计
       float sum = 0.0f;
@@ -192,8 +127,6 @@ void IMUManager::_calculateStrokeRate() {
 
       _isCalibrating = false;
       _calibrationComplete = true;
-      Serial.printf("[校准完成] %.2fs: Z轴, 均值=%.3fg, 标准差=%.3fg\n",
-                    millis() / 1000.0f, _backgroundMean, _backgroundStd);
     }
     return; // 校准期间不进行检测
   }
@@ -259,7 +192,8 @@ void IMUManager::_calculateStrokeRate() {
         _troughMinTime = now;
         _troughMinFiltered = current_filtered;
         _recoveryCounter = 0;
-        // Serial.printf("[进入波谷区] %.2fs: %.3fg\n", now/1000.0f, deviation);
+        // Serial.printf("[进入波谷区] %.2fs: %.3fg\n", now/1000.0f,
+        // deviation);
       } else {
         // 波峰持续太短
         _strokeState = STATE_BACKGROUND;
