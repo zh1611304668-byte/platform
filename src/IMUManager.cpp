@@ -51,7 +51,7 @@ void IMUManager::update() {
     if (_qmi.getAccelerometer(_acc.x, _acc.y, _acc.z)) {
       _accX = _acc.x;
       _accY = _acc.y;
-      _accZ = _acc.z;
+      _accZ = -_acc.z;
       _dataValid = true;
     }
   }
@@ -71,9 +71,9 @@ void IMUManager::_initSensor() {
     return;
   }
 
-  // 配置加速度计: 125Hz, 4G量程 (与Python代码注释一致: ~100Hz)
+  // 配置加速度计: 62.5Hz, 4G量程 (约16ms间隔)
   if (_qmi.configAccelerometer(SensorQMI8658::ACC_RANGE_4G,
-                               SensorQMI8658::ACC_ODR_125Hz,
+                               SensorQMI8658::ACC_ODR_62_5Hz,
                                SensorQMI8658::LPF_MODE_0) != 0) {
     _sensorFound = false;
     return;

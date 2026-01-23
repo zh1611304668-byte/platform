@@ -68,10 +68,10 @@ public:
   static constexpr int WINDOW_SIZE =
       200; ///< 滑动窗口(采样点) - 300点=3秒@100Hz
 
-  static constexpr uint32_t SAMPLE_INTERVAL = 8; ///< 采样间隔(ms)
+  static constexpr uint32_t SAMPLE_INTERVAL = 16; ///< 采样间隔(ms) - 62.5Hz
   /// @}
 
-  /// @name 动态阈值参数 (与Python模拟器完全一致)
+  /// @name 动态阈值参数
   /// @{
   static constexpr float PEAK_ENTER_FACTOR =
       1.4f; ///< 进入波峰区阈值系数 (factor * std)
@@ -88,8 +88,8 @@ public:
   static constexpr uint32_t MIN_TROUGH_DURATION =
       50; ///< 波谷区最小持续时间(ms)
   static constexpr uint32_t STROKE_MIN_INTERVAL =
-      500; ///< 两次划桨最小间隔(ms) - 支持最高120SPM
-  static constexpr uint32_t COOLDOWN_DURATION = 150; ///< 冷却时间(ms)
+      150; ///< 两次划桨最小间隔(ms) - 支持最高120SPM
+  static constexpr uint32_t COOLDOWN_DURATION = 100; ///< 冷却时间(ms)
   static constexpr uint32_t STROKE_TIMEOUT = 8000;   ///< 超时重置(ms)
   static constexpr int RECOVERY_SAMPLES = 5;         ///< 恢复检测连续采样数
   /// @}

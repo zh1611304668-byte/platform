@@ -473,7 +473,7 @@ void loop() {
   static unsigned long lastLogTime = 0;
   static unsigned long lastSdStatusPrint = 0;
 
-  if (now - lastLogTime > 8) { // 8ms interval = 125Hz，与IMU采样率一致
+  if (now - lastLogTime > 16) { // 16ms interval = 62.5Hz，与IMU采样率一致
     lastLogTime = now;
 
     if (training.isActive() && rtcInitialized && rtcTimeSynced) {

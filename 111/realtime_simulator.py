@@ -10,10 +10,11 @@ import pandas as pd
 from PyQt5.QtWidgets import (
     QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
     QPushButton, QLabel, QFileDialog, QSlider, QGroupBox, QGridLayout,
-    QMessageBox, QFrame
+    QMessageBox, QFrame, QScrollArea, QDoubleSpinBox, QSpinBox,
+    QComboBox, QFormLayout, QRadioButton, QButtonGroup
 )
 
-from PyQt5.QtCore import QTimer, Qt
+from PyQt5.QtCore import QTimer, Qt, QThread, pyqtSignal, QObject
 from PyQt5.QtGui import QFont
 import pyqtgraph as pg
 
@@ -45,6 +46,13 @@ class ButterworthFilter:
         self.y2 = 0.0
         
     def filter(self, input_val):
+        # Initialize state with first value to avoid startup transient
+        if self.x1 == 0.0 and self.x2 == 0.0 and self.y1 == 0.0 and self.y2 == 0.0:
+             self.x1 = input_val
+             self.x2 = input_val
+             self.y1 = input_val
+             self.y2 = input_val
+             
         output = (self.b0 * input_val + 
                   self.b1 * self.x1 + 
                   self.b2 * self.x2 - 
@@ -114,7 +122,7 @@ class RealtimeStrokeDetector:
         # 时间参数
         self.MIN_PEAK_DURATION = 30    # 波峰区最小持续时间(ms) - 降低
         self.MIN_TROUGH_DURATION = 50  # 波谷区最小持续时间(ms) - 降低
-        self.STROKE_MIN_INTERVAL = 800 # 两次划桨最小间隔(ms)
+        self.STROKE_MIN_INTERVAL = 150 # 两次划桨最小间隔(ms)
         self.COOLDOWN_DURATION = 300   # 冷却时间(ms)
         
         self.DEBUG = True
@@ -171,10 +179,14 @@ class RealtimeStrokeDetector:
         self._lastAxisSelection = 0
         
         # ============ 初始化阶段 ============
-        # 使用前0.8秒(100个样本@125Hz)作为静止期，快速建立背景统计
-        self.CALIBRATION_SAMPLES = 100  # 校准期样本数（与C++固件一致）
+        # 使用前N毫秒作为静止期，快速建立背景统计
+        self.CALIBRATION_DURATION = 500  # 校准期时长(ms)
         self._isCalibrating = True       # 是否处于校准阶段
         self._calibrationComplete = False
+        
+    def _get_calibration_samples(self):
+        """根据当前采样率计算需要的校准样本数"""
+        return int(self.CALIBRATION_DURATION * self.sample_rate / 1000.0)
         
 
     def _check_active_axis(self, timestamp_ms):
@@ -242,17 +254,21 @@ class RealtimeStrokeDetector:
 
         # ============ 初始化校准阶段 ============
         if self._isCalibrating:
-            # 收集前100个样本用于建立初始背景统计（固定Y轴）
-            if len(self._accelHistory[self._activeAxis]) >= self.CALIBRATION_SAMPLES:
-                # 校准完成，计算Y轴的背景统计
+            cal_samples = self._get_calibration_samples()
+            # 收集样本用于建立初始背景统计
+            if len(self._accelHistory[self._activeAxis]) >= cal_samples:
+                # 校准完成
                 data = list(self._accelHistory[self._activeAxis])
+                # 只取最近的 cal_samples 个样本
+                data = data[-cal_samples:]
+                
                 self._backgroundMean = np.mean(data)
                 self._backgroundStd = max(np.std(data, ddof=1), 0.02)
                 self._isCalibrating = False
                 self._calibrationComplete = True
                 
                 if self.DEBUG:
-                    print(f"[校准完成] {timestamp_ms/1000:.2f}s: Z轴")
+                    print(f"[校准完成] {timestamp_ms/1000:.2f}s: Z轴 (Duration={self.CALIBRATION_DURATION}ms, Samples={cal_samples})")
                     print(f"           均值={self._backgroundMean:.3f}g, 标准差={self._backgroundStd:.3f}g")
             return None  # 校准期间不进行检测
         
@@ -296,12 +312,16 @@ class RealtimeStrokeDetector:
                     print(f"[进入波峰区] {timestamp_ms/1000:.2f}s: +{deviation:.3f}g (阈值={peak_threshold:.3f}g)")
         
         elif self._strokeState == self.STATE_PEAK_ZONE:
-            # 在波峰区: 跟踪最大值，等待下降到负值区域
+            # 在波峰区: 跟踪最大值
+            # 1. 跟踪算法用的偏差最大值
             if deviation > self._peakMaxValue:
                 self._peakMaxValue = deviation
+            
+            # 2. 跟踪可视化用的滤波值最大值 (独立跟踪，确保标记在波峰尖端)
+            if current_filtered > self._peakMaxFiltered:
+                self._peakMaxFiltered = current_filtered
                 self._peakMaxTime = timestamp_ms
                 self._peakMaxRaw = current_raw
-                self._peakMaxFiltered = current_filtered  # 更新实际滤波值用于可视化
             
 
             # 检测是否进入波谷区(偏差变负)
@@ -324,12 +344,16 @@ class RealtimeStrokeDetector:
                     self._strokeState = self.STATE_BACKGROUND
         
         elif self._strokeState == self.STATE_TROUGH_ZONE:
-            # 在波谷区: 跟踪最小值，等待恢复到背景
+            # 在波谷区: 跟踪最小值
+            # 1. 跟踪算法用的偏差最小值
             if deviation < self._troughMinValue:
                 self._troughMinValue = deviation
+
+            # 2. 跟踪可视化用的滤波值最小值 (独立跟踪)
+            if current_filtered < self._troughMinFiltered:
+                self._troughMinFiltered = current_filtered
                 self._troughMinTime = timestamp_ms
                 self._troughMinRaw = current_raw
-                self._troughMinFiltered = current_filtered  # 更新实际滤波值
                 self._recoveryCounter = 0  # 出现新低点，重置恢复计数
 
             
@@ -366,8 +390,9 @@ class RealtimeStrokeDetector:
             if self._recoveryCounter >= self.RECOVERY_SAMPLES:
                 trough_duration = timestamp_ms - self._phaseStartTime
                 if trough_duration >= self.MIN_TROUGH_DURATION:
-                    # 计算振幅
-                    amplitude = self._peakMaxValue - self._troughMinValue
+                    # 计算振幅 (使用滤波后的峰峰值，物理意义更明确且稳定)
+                    # 原逻辑: amplitude = self._peakMaxValue - self._troughMinValue (基于偏差)
+                    amplitude = self._peakMaxFiltered - self._troughMinFiltered
                     
                     if self.DEBUG:
                         print(f"[恢复到背景] 振幅={amplitude:.3f}g (需要>{self.MIN_AMPLITUDE}g)")
@@ -445,21 +470,140 @@ class RealtimeStrokeDetector:
 
 
 
+class SimulationWorker(QThread):
+    """
+    Simulation Worker Thread
+    Handles the data processing loop independently from the UI thread.
+    """
+    frame_update_signal = pyqtSignal()  # Signal to trigger UI update (30 FPS)
+    finished_signal = pyqtSignal()      # Signal when simulation ends
+
+    def __init__(self, detector):
+        super().__init__()
+        self.detector = detector
+        self.timestamps = None
+        self.acc_data = None
+        self.timestamps = None
+        self.acc_data = None
+        
+        self.current_idx = 0
+        self.playback_speed = 1.0
+        self.is_running = False
+        self.is_paused = False
+        
+        # Timing control
+        self.last_sim_time = 0
+        self.wall_clock_start = 0
+        self.sim_start_time = 0
+        
+    def load_data(self, timestamps, acc_data):
+        self.timestamps = timestamps
+        self.acc_data = acc_data
+        self.current_idx = 0
+        
+    def run(self):
+        self.is_running = True
+        
+        # Update interval for UI (33ms = ~30 FPS)
+        ui_update_interval = 0.033
+        last_ui_update = time.time()
+        
+        # Performance optimization:
+        # Instead of strict time synchronization which can drift or lag,
+        # we process a batch of samples corresponding to the elapsed time.
+        
+        self.wall_clock_start = time.time()
+        # Ensure we have data
+        if self.timestamps is None or len(self.timestamps) == 0:
+            return
+
+        self.sim_start_time = self.timestamps[self.current_idx]
+        
+        while self.is_running and self.current_idx < len(self.timestamps):
+            if self.is_paused:
+                time.sleep(0.1)
+                # Reset clock when resuming
+                self.wall_clock_start = time.time()
+                self.sim_start_time = self.timestamps[self.current_idx]
+                continue
+            
+            # 1. Calculate target simulation time
+            now = time.time()
+            elapsed_wall = now - self.wall_clock_start
+            target_sim_time = self.sim_start_time + (elapsed_wall * 1000.0 * self.playback_speed)
+            
+            # 2. Fast-forward simulation to target time
+            # Batch process to avoid function call overhead in loop if possible, 
+            # but here we need to call process_sample
+            
+            start_idx = self.current_idx
+            
+            # Limit batch size to prevent blocking this thread for too long (e.g. if speed is huge)
+            # But since this IS a background thread, blocking it is fine, 
+            # as long as we yield eventually.
+            
+            while self.current_idx < len(self.timestamps):
+                ts = self.timestamps[self.current_idx]
+                if ts > target_sim_time:
+                    break
+                
+                # Process sample
+                ax = self.acc_data['x'][self.current_idx]
+                ay = self.acc_data['y'][self.current_idx]
+                az = self.acc_data['z'][self.current_idx]
+                
+                self.detector.process_sample(ts, ax, ay, az)
+                self.current_idx += 1
+            
+            # 3. Check if we need to update UI
+            if now - last_ui_update >= ui_update_interval:
+                self.frame_update_signal.emit()
+                last_ui_update = now
+            
+            # 4. Sleep a tiny bit to prevent 100% CPU usage on this core
+            # If we are behind (processing < real time * speed), we shouldn't sleep ideally,
+            # but a 1ms sleep is good for system stability.
+            time.sleep(0.001)
+            
+        self.is_running = False
+        self.finished_signal.emit()
+
+    def set_speed(self, speed):
+        # Adjust clocks to prevent jumping
+        now = time.time()
+        if self.current_idx < len(self.timestamps):
+            current_sim_time = self.timestamps[self.current_idx]
+            
+            # Reset reference point
+            self.playback_speed = float(speed)
+            self.wall_clock_start = now
+            self.sim_start_time = current_sim_time
+
+    def stop(self):
+        self.is_running = False
+        self.wait()
+
+
 class RealtimeSimulatorUI(QMainWindow):
     def __init__(self):
         super().__init__()
-        self.setWindowTitle("实时划桨检测仿真器 - C++算法模拟")
+        self.setWindowTitle("实时划桨检测仿真器")
+
         self.setGeometry(100, 100, 1400, 800)
         
         self.detector = RealtimeStrokeDetector()
         self.data = None
-        self.current_idx = 0
         self.is_playing = False
-        self.playback_speed = 1.0  # 1x = 实时
         
-        # UI性能优化：高速时减少UI刷新频率
-        self.ui_update_interval = 1  # UI更新间隔（帧数）
-        self.ui_update_counter = 0   # UI更新计数器
+        # Init Worker
+        self.worker = SimulationWorker(self.detector)
+        self.worker.frame_update_signal.connect(self.update_ui)
+        self.worker.finished_signal.connect(self.on_simulation_finished)
+        
+        # 自动跟踪模式
+        self.auto_tracking = True  # 默认启用自动跟踪
+        
+        self.init_ui()
         
         # 自动跟踪模式
         self.auto_tracking = True  # 默认启用自动跟踪
@@ -469,159 +613,57 @@ class RealtimeSimulatorUI(QMainWindow):
     def init_ui(self):
         central = QWidget()
         self.setCentralWidget(central)
-        layout = QVBoxLayout(central)
+        main_layout = QHBoxLayout(central)
         
-        # ============ 控制面板 ============
-        control_group = QGroupBox("控制面板")
-        control_layout = QHBoxLayout()
+        # ============ 左侧控制面板 (Scrollable) ============
+        sidebar = QWidget()
+        sidebar_layout = QVBoxLayout(sidebar)
+        sidebar_layout.setAlignment(Qt.AlignTop)
         
-        self.load_btn = QPushButton("📂 加载CSV")
-        self.load_btn.clicked.connect(self.load_data)
-        control_layout.addWidget(self.load_btn)
+        scroll = QScrollArea()
+        scroll.setWidget(sidebar)
+        scroll.setWidgetResizable(True)
+        scroll.setFixedWidth(380) # 固定宽度
         
-        self.play_btn = QPushButton("▶ 开始")
-        self.play_btn.clicked.connect(self.toggle_play)
-        self.play_btn.setEnabled(False)
-        self.play_btn.setStyleSheet("font-weight: bold; padding: 5px 15px;")
-        control_layout.addWidget(self.play_btn)
+        # 1. 基本控制
+        self.create_control_panel(sidebar_layout)
         
-        self.reset_btn = QPushButton("🔄 重置")
-        self.reset_btn.clicked.connect(self.reset_simulation)
-        control_layout.addWidget(self.reset_btn)
+        # 2. 轴选择
+        self.create_axis_panel(sidebar_layout)
         
-        control_layout.addSpacing(20)
+        # 3. 算法参数
+        self.create_param_panel(sidebar_layout)
         
-        # 速度预设按钮
-        speed_label = QLabel("速度:")
-        speed_label.setStyleSheet("font-weight: bold;")
-        control_layout.addWidget(speed_label)
+        # 4. 状态显示
+        self.create_stats_panel(sidebar_layout)
         
-        self.speed_buttons = []
-        speed_presets = [0.25, 0.5, 1, 2, 5, 10, 20, 50, 100]
-
-        for speed in speed_presets:
-            btn = QPushButton(f"{speed}x")
-            btn.setCheckable(True)
-            btn.setMinimumWidth(45)
-            if speed == 1:  # 默认1x
-                btn.setChecked(True)
-                btn.setStyleSheet("background-color: #4CAF50; color: white; font-weight: bold;")
-            btn.clicked.connect(lambda checked, s=speed, b=btn: self.set_speed(s, b))
-            control_layout.addWidget(btn)
-            self.speed_buttons.append((speed, btn))
+        main_layout.addWidget(scroll)
         
-        control_layout.addStretch()
+        # ============ 右侧波形图 ============
+        right_widget = QWidget()
+        right_layout = QVBoxLayout(right_widget)
         
-        # 自动跟踪开关
-        self.tracking_btn = QPushButton("👁 跟踪")
-        self.tracking_btn.setCheckable(True)
-        self.tracking_btn.setChecked(True)
-        self.tracking_btn.setStyleSheet("background-color: #4CAF50; color: white; font-weight: bold;")
-        self.tracking_btn.clicked.connect(self.toggle_tracking)
-        control_layout.addWidget(self.tracking_btn)
-        
-        control_group.setLayout(control_layout)
-        layout.addWidget(control_group)
-        
-        # ============ 状态显示面板 ============
-        stats_group = QGroupBox("检测状态")
-        stats_layout = QHBoxLayout()
-        
-        # 左侧：大型状态指示器
-        state_frame = QFrame()
-        state_frame.setFrameStyle(QFrame.Box | QFrame.Raised)
-        state_frame.setMinimumWidth(120)
-        state_frame.setMaximumWidth(150)
-        state_vbox = QVBoxLayout(state_frame)
-        
-        self.state_indicator = QLabel("背景")
-        self.state_indicator.setAlignment(Qt.AlignCenter)
-        self.state_indicator.setFont(QFont("Arial", 16, QFont.Bold))
-        self.state_indicator.setMinimumHeight(50)
-        self.state_indicator.setStyleSheet("""
-            background-color: #9E9E9E; 
-            color: white; 
-            border-radius: 8px;
-            padding: 10px;
-        """)
-        state_vbox.addWidget(self.state_indicator)
-        stats_layout.addWidget(state_frame)
-        
-        # 中间：基本信息
-        info_frame = QFrame()
-        info_layout = QGridLayout(info_frame)
-        
-        self.time_label = QLabel("时间: 0.0s")
-        self.time_label.setFont(QFont("Arial", 11, QFont.Bold))
-        info_layout.addWidget(self.time_label, 0, 0)
-        
-        self.count_label = QLabel("划桨数: 0")
-        self.count_label.setFont(QFont("Arial", 11, QFont.Bold))
-        self.count_label.setStyleSheet("color: #1976D2;")
-        info_layout.addWidget(self.count_label, 0, 1)
-        
-        self.rate_label = QLabel("桨频: 0 SPM")
-        self.rate_label.setFont(QFont("Arial", 11, QFont.Bold))
-        self.rate_label.setStyleSheet("color: #388E3C;")
-        info_layout.addWidget(self.rate_label, 0, 2)
-        
-        self.axis_label = QLabel("活跃轴: Y")
-        self.axis_label.setStyleSheet("color: #E65100; font-weight: bold;")
-        info_layout.addWidget(self.axis_label, 1, 0)
-        
-        stats_layout.addWidget(info_frame)
-        
-        # 右侧：算法调试信息
-        debug_frame = QFrame()
-        debug_frame.setFrameStyle(QFrame.StyledPanel)
-        debug_frame.setStyleSheet("background-color: #FAFAFA; border-radius: 5px;")
-        debug_layout = QGridLayout(debug_frame)
-        debug_layout.setSpacing(3)
-        
-        self.deviation_label = QLabel("偏差: 0.000g")
-        self.deviation_label.setFont(QFont("Consolas", 10))
-        debug_layout.addWidget(self.deviation_label, 0, 0)
-        
-        self.threshold_label = QLabel("阈值: 0.000g")
-        self.threshold_label.setFont(QFont("Consolas", 10))
-        debug_layout.addWidget(self.threshold_label, 0, 1)
-        
-        self.duration_label = QLabel("持续: 0ms")
-        self.duration_label.setFont(QFont("Consolas", 10))
-        debug_layout.addWidget(self.duration_label, 0, 2)
-        
-        self.peak_label = QLabel("波峰最大: --")
-        self.peak_label.setFont(QFont("Consolas", 10))
-        self.peak_label.setStyleSheet("color: #D32F2F;")
-        debug_layout.addWidget(self.peak_label, 1, 0)
-        
-        self.trough_label = QLabel("波谷最小: --")
-        self.trough_label.setFont(QFont("Consolas", 10))
-        self.trough_label.setStyleSheet("color: #388E3C;")
-        debug_layout.addWidget(self.trough_label, 1, 1)
-        
-        self.recovery_label = QLabel("恢复: 0/5")
-        self.recovery_label.setFont(QFont("Consolas", 10))
-        debug_layout.addWidget(self.recovery_label, 1, 2)
-        
-        stats_layout.addWidget(debug_frame)
-        stats_layout.setStretch(0, 1)  # state indicator
-        stats_layout.setStretch(1, 2)  # basic info
-        stats_layout.setStretch(2, 3)  # debug info
-        
-        stats_group.setLayout(stats_layout)
-        layout.addWidget(stats_group)
-        
-        # ============ 波形图 ============
-        self.plot_widget = pg.PlotWidget(title="实时加速度波形 (滑动窗口)")
+        # Use simple ViewBox update for performance? No, stick to PlotWidget but update Data efficiently.
+        self.plot_widget = pg.PlotWidget(title="实时加速度波形 (30 FPS)")
         self.plot_widget.setBackground('w')
         self.plot_widget.setLabel('left', 'Acceleration (g)')
         self.plot_widget.setLabel('bottom', 'Time (s)')
         self.plot_widget.showGrid(x=True, y=True, alpha=0.3)
-        self.plot_widget.setYRange(-1.0, 1.0)  # 初始范围，会动态调整
-        self.plot_widget.enableAutoRange(axis='y', enable=False)  # 禁用Y轴自动缩放
+        self.plot_widget.setYRange(-1.0, 1.0)
+        self.plot_widget.enableAutoRange(axis='y', enable=False)
         
+        # 图表元素初始化
+        self.init_plot_elements()
+        
+        right_layout.addWidget(self.plot_widget)
+        main_layout.addWidget(right_widget)
+        
+        # 定时器 (不再用于仿真，仅用于其他可能的UI刷新，或者移除)
+        # self.timer = QTimer() 
+        # self.timer.timeout.connect(self.update_frame) 
 
+        
+    def init_plot_elements(self):
         # 主曲线
         self.curve = self.plot_widget.plot(pen=pg.mkPen('b', width=2))
         
@@ -630,72 +672,196 @@ class RealtimeSimulatorUI(QMainWindow):
         self.peak_threshold_line = pg.InfiniteLine(angle=0, pen=pg.mkPen('#F44336', width=1, style=Qt.DashLine))
         self.recovery_upper_line = pg.InfiniteLine(angle=0, pen=pg.mkPen('#4CAF50', width=1, style=Qt.DotLine))
         self.recovery_lower_line = pg.InfiniteLine(angle=0, pen=pg.mkPen('#4CAF50', width=1, style=Qt.DotLine))
+        
         self.plot_widget.addItem(self.mean_line)
         self.plot_widget.addItem(self.peak_threshold_line)
         self.plot_widget.addItem(self.recovery_upper_line)
         self.plot_widget.addItem(self.recovery_lower_line)
         
-        # 波峰标记（红色向下三角）
+        # 标记点
         self.peak_scatter = pg.ScatterPlotItem(
             size=14, brush=pg.mkBrush(255, 0, 0, 220), 
             symbol='t', pen=pg.mkPen('w', width=1)
         )
         self.plot_widget.addItem(self.peak_scatter)
         
-        # 波谷标记（绿色向上三角）
         self.trough_scatter = pg.ScatterPlotItem(
             size=14, brush=pg.mkBrush(0, 180, 0, 220), 
             symbol='t1', pen=pg.mkPen('w', width=1)
         )
         self.plot_widget.addItem(self.trough_scatter)
         
-        # 划桨周期背景区域 (用列表存储多个LinearRegionItem)
         self.stroke_regions = []
         
-        # 添加图例
-        legend = self.plot_widget.addLegend(offset=(70, 30))
+        # 图例
+        legend = self.plot_widget.addLegend(offset=(30, 30))
         legend.addItem(pg.PlotDataItem(pen=pg.mkPen('#2196F3', width=1, style=Qt.DashLine)), '均值')
         legend.addItem(pg.PlotDataItem(pen=pg.mkPen('#F44336', width=1, style=Qt.DashLine)), '波峰阈值')
-        legend.addItem(pg.PlotDataItem(pen=pg.mkPen('#4CAF50', width=1, style=Qt.DotLine)), '恢复阈值')
-        
-        layout.addWidget(self.plot_widget)
-        
-        # 监听图表的视图变化（用户拖动时禁用跟踪）
-        self.plot_widget.sigRangeChanged.connect(self.on_view_changed)
-        
-        # 定时器
-        self.timer = QTimer()
-        self.timer.timeout.connect(self.update_frame)
-    
-    def set_speed(self, speed, clicked_btn):
-        """设置播放速度"""
-        self.playback_speed = speed
-        
-        # 根据速度调整UI刷新频率，避免高速时UI卡顿
-        if speed >= 50:
-            self.ui_update_interval = 10  # 高速时每10帧更新一次UI
-        elif speed >= 10:
-            self.ui_update_interval = 5   # 中速时每5帧更新一次UI
-        else:
-            self.ui_update_interval = 1   # 低速时每帧都更新UI
-        
-        # 重置计数器
-        self.ui_update_counter = 0
-        
-        # 更新按钮状态
-        for s, btn in self.speed_buttons:
-            if btn == clicked_btn:
-                btn.setChecked(True)
-                btn.setStyleSheet("background-color: #4CAF50; color: white; font-weight: bold;")
-            else:
-                btn.setChecked(False)
-                btn.setStyleSheet("")
-        # 如果正在播放,更新定时器间隔
-        if self.is_playing:
-            interval = max(1, int(8 / self.playback_speed))
-            self.timer.setInterval(interval)
-        
 
+    def create_control_panel(self, parent_layout):
+        group = QGroupBox("控制面板")
+        layout = QVBoxLayout()
+        
+        # 按钮行
+        btn_layout = QHBoxLayout()
+        self.load_btn = QPushButton("📂 加载CSV")
+        self.load_btn.clicked.connect(self.load_data)
+        btn_layout.addWidget(self.load_btn)
+        
+        self.reset_btn = QPushButton("重置")
+        self.reset_btn.clicked.connect(self.reset_simulation)
+        btn_layout.addWidget(self.reset_btn)
+        layout.addLayout(btn_layout)
+        
+        self.play_btn = QPushButton("▶ 开始")
+        self.play_btn.clicked.connect(self.toggle_play)
+        self.play_btn.setEnabled(False)
+        self.play_btn.setStyleSheet("font-weight: bold; padding: 6px; font-size: 14px;")
+        layout.addWidget(self.play_btn)
+        
+        # 速度控制
+        speed_layout = QHBoxLayout()
+        speed_layout.addWidget(QLabel("播放速度:"))
+        self.speed_combo = QComboBox()
+        self.speed_combo.addItems(["0.25x", "0.5x", "1.0x", "2.0x", "5.0x", "10x", "20x", "50x", "100x"])
+        self.speed_combo.setCurrentText("1.0x")
+        self.speed_combo.currentTextChanged.connect(self.on_speed_changed)
+        speed_layout.addWidget(self.speed_combo)
+        layout.addLayout(speed_layout)
+        
+        # 跟踪开关
+        self.tracking_btn = QPushButton("自动跟踪")
+        self.tracking_btn.setCheckable(True)
+        self.tracking_btn.setChecked(True)
+        self.tracking_btn.setStyleSheet("background-color: #4CAF50; color: white;")
+        self.tracking_btn.toggled.connect(self.toggle_tracking)
+        layout.addWidget(self.tracking_btn)
+        
+        group.setLayout(layout)
+        parent_layout.addWidget(group)
+
+    def create_axis_panel(self, parent_layout):
+        group = QGroupBox("活动轴选择 (Active Axis)")
+        layout = QHBoxLayout()
+        
+        self.axis_group = QButtonGroup(self)
+        self.axis_radios = []
+        for i, name in enumerate(['X 轴', 'Y 轴', 'Z 轴']):
+            rb = QRadioButton(name)
+            self.axis_group.addButton(rb, i)
+            layout.addWidget(rb)
+            self.axis_radios.append(rb)
+            if i == 2: rb.setChecked(True) # 默认Z轴
+            
+        self.axis_group.buttonClicked[int].connect(self.change_axis)
+        
+        group.setLayout(layout)
+        parent_layout.addWidget(group)
+
+    def create_param_panel(self, parent_layout):
+        group = QGroupBox("算法参数调节")
+        layout = QFormLayout()
+        
+        self.param_inputs = {}
+
+        def add_param(label, attr_name, val_type='float', min_v=0, max_v=100, step=0.01):
+            if val_type == 'float':
+                sb = QDoubleSpinBox()
+                sb.setDecimals(3)
+                sb.setSingleStep(step)
+            else:
+                sb = QSpinBox()
+                sb.setSingleStep(int(step))
+            
+            sb.setRange(min_v, max_v)
+            val = getattr(self.detector, attr_name)
+            sb.setValue(val)
+            # 绑定修改
+            sb.valueChanged.connect(lambda v, attr=attr_name: setattr(self.detector, attr, v))
+            layout.addRow(label, sb)
+            self.param_inputs[attr_name] = sb
+            return sb
+
+        layout.addRow(QLabel("<b>阈值参数</b>"))
+        add_param("波峰阈值 (g)", "MIN_PEAK_ABSOLUTE", 'float', 0.01, 2.0, 0.01)
+        add_param("波谷阈值 (g)", "TROUGH_THRESHOLD", 'float', -2.0, 0.0, 0.01)
+        add_param("最小振幅 (g)", "MIN_AMPLITUDE", 'float', 0.01, 2.0, 0.01)
+        
+        layout.addRow(QLabel("<b>动态系数</b>"))
+        add_param("波峰进入系数", "PEAK_ENTER_FACTOR", 'float', 0.1, 10.0, 0.1)
+        add_param("恢复系数", "RECOVERY_FACTOR", 'float', 0.1, 10.0, 0.1)
+        
+        layout.addRow(QLabel("<b>时间参数 (ms)</b>"))
+        add_param("最小波峰持续", "MIN_PEAK_DURATION", 'int', 0, 500, 10)
+        add_param("最小波谷持续", "MIN_TROUGH_DURATION", 'int', 0, 500, 10)
+        add_param("冷却时间", "COOLDOWN_DURATION", 'int', 0, 2000, 50)
+        add_param("最小划桨间隔", "STROKE_MIN_INTERVAL", 'int', 100, 3000, 50)
+        add_param("窗口大小", "WINDOW_SIZE", 'int', 10, 1000, 10)
+        add_param("校准时长(ms)", "CALIBRATION_DURATION", 'int', 0, 2000, 50)
+        
+        group.setLayout(layout)
+        parent_layout.addWidget(group)
+
+    def create_stats_panel(self, parent_layout):
+        group = QGroupBox("实时状态")
+        layout = QVBoxLayout()
+        
+        # 状态指示器
+        self.state_indicator = QLabel("背景")
+        self.state_indicator.setAlignment(Qt.AlignCenter)
+        self.state_indicator.setFont(QFont("Arial", 14, QFont.Bold))
+        self.state_indicator.setStyleSheet("background-color: #9E9E9E; color: white; border-radius: 5px; padding: 5px;")
+        layout.addWidget(self.state_indicator)
+        
+        # 网格显示数值
+        grid = QGridLayout()
+        
+        self.time_label = QLabel("时间: 0.0s")
+        self.count_label = QLabel("划桨数: 0")
+        self.rate_label = QLabel("桨频: 0 SPM")
+        self.axis_label = QLabel("活跃轴: Z")
+        
+        grid.addWidget(self.time_label, 0, 0)
+        grid.addWidget(self.count_label, 0, 1)
+        grid.addWidget(self.rate_label, 1, 0)
+        grid.addWidget(self.axis_label, 1, 1)
+        
+        layout.addLayout(grid)
+        
+        # 调试详情
+        debug_group = QGroupBox("调试数据")
+        d_layout = QGridLayout()
+        
+        self.deviation_label = QLabel("偏差: 0.000g")
+        self.threshold_label = QLabel("阈值: 0.000g")
+        self.peak_label = QLabel("波峰Max: --")
+        self.trough_label = QLabel("波谷Min: --")
+        self.duration_label = QLabel("持续: 0ms")
+        self.recovery_label = QLabel("恢复: 0")
+        
+        d_layout.addWidget(self.deviation_label, 0, 0)
+        d_layout.addWidget(self.threshold_label, 0, 1)
+        d_layout.addWidget(self.peak_label, 1, 0)
+        d_layout.addWidget(self.trough_label, 1, 1)
+        d_layout.addWidget(self.duration_label, 2, 0)
+        d_layout.addWidget(self.recovery_label, 2, 1)
+        
+        debug_group.setLayout(d_layout)
+        layout.addWidget(debug_group)
+        
+        group.setLayout(layout)
+        parent_layout.addWidget(group)
+
+    def change_axis(self, axis_idx):
+        if self.detector:
+            self.detector._activeAxis = axis_idx
+            names = ['X', 'Y', 'Z']
+            print(f"切换活动轴: {names[axis_idx]}")
+    
+    def on_speed_changed(self, text):
+        val = float(text.replace('x', ''))
+        if hasattr(self, 'worker'):
+            self.worker.set_speed(val)
     
     def toggle_tracking(self):
         """切换自动跟踪模式"""
@@ -730,9 +896,8 @@ class RealtimeSimulatorUI(QMainWindow):
         # 检测格式
         if 'timestamp' in df.columns and 'acc_y' in df.columns:
             df = df.dropna()
-            # ⚠️ 关键修复：时间戳归零化（减去初始值）并检测单位
             timestamps_raw = df['timestamp'].values.astype(float)
-            timestamps_raw = timestamps_raw - timestamps_raw[0]  # 从0开始
+            # timestamps_raw = timestamps_raw - timestamps_raw[0]  # DISABLED: Keep original timestamps
             
             # 检测单位：如果平均间隔小于1.0，说明是秒，需要转毫秒
             mean_diff = np.mean(np.diff(timestamps_raw))
@@ -755,92 +920,70 @@ class RealtimeSimulatorUI(QMainWindow):
             print(f"采样率: ~{actual_sample_rate:.1f} Hz")
             
             # ⚠️ 关键修复：根据实际采样率调整截止频率
-            # Nyquist定理：截止频率必须 < 采样率/2
-            # 对于低采样率数据，需要降低截止频率
-            nyquist = actual_sample_rate / 2
-            optimal_cutoff = min(3.0, nyquist * 0.15)  # 不超过Nyquist频率的15%
-            
-            if abs(actual_sample_rate - 125.0) > 10:  # 如果采样率差异超过10Hz
-                print(f"[警告] 实际采样率({actual_sample_rate:.1f}Hz)与设计采样率(125Hz)差异较大")
-                print(f"       Nyquist频率={nyquist:.1f}Hz, 最优截止频率={optimal_cutoff:.2f}Hz")
-                print(f"       正在根据实际采样率重新初始化Butterworth滤波器...")
-                self.detector.sample_rate = actual_sample_rate
-                self.detector.cutoff_hz = optimal_cutoff
-                self.detector.filters = [
-                    ButterworthFilter(cutoff_hz=optimal_cutoff, sample_rate=actual_sample_rate) 
-                    for _ in range(3)
-                ]
-                print(f"       ✅ 滤波器已更新: cutoff={optimal_cutoff:.2f}Hz, fs={actual_sample_rate:.1f}Hz")
-            else:
-                print(f"       采样率接近设计值，使用默认滤波器: cutoff=3.0Hz, fs=125Hz")
         else:
             QMessageBox.warning(self, "错误", "CSV需要包含 timestamp, acc_x, acc_y, acc_z 列")
             return
         
-        self.current_idx = 0
-        self.detector = RealtimeStrokeDetector()  # 重置检测器
+        # 1. 重置仿真环境
+        self.reset_simulation()
         self.play_btn.setEnabled(True)
         self.load_btn.setText(f"✓ {len(self.timestamps)} 样本")
         
-        # 重置图表
-        self.reset_simulation()
+        # 加载数据到Worker
+        self.worker.load_data(self.timestamps, self.acc_data)
+        
+        # 2. 根据数据特性调整检测器滤波器
+        # Nyquist定理：截止频率必须 < 采样率/2
+        nyquist = actual_sample_rate / 2
+        optimal_cutoff = min(3.0, nyquist * 0.15)
+        
+        if abs(actual_sample_rate - 125.0) > 10:
+            print(f"[警告] 实际采样率({actual_sample_rate:.1f}Hz)与设计采样率(125Hz)差异较大")
+            print(f"       调整滤波器: cutoff={optimal_cutoff:.2f}Hz, fs={actual_sample_rate:.1f}Hz")
+            
+            self.detector.sample_rate = actual_sample_rate
+            self.detector.cutoff_hz = optimal_cutoff
+            self.detector.filters = [
+                ButterworthFilter(cutoff_hz=optimal_cutoff, sample_rate=actual_sample_rate) 
+                for _ in range(3)
+            ]
+        else:
+             print(f"       采样率接近设计值，使用默认滤波器")
         
     def toggle_play(self):
         if not self.is_playing:
+            # Start
             self.is_playing = True
             self.play_btn.setText("⏸ 暂停")
-            # 固定16ms刷新间隔(约60fps)，通过每帧处理样本数来控制速度
-            self.timer.start(16)
+            
+            if not self.worker.isRunning():
+                self.worker.start()
+            self.worker.is_paused = False
+            
         else:
+            # Pause
             self.is_playing = False
             self.play_btn.setText("▶ 继续")
-            self.timer.stop()
+            self.worker.is_paused = True
     
-    def update_speed(self, value):
-        self.playback_speed = value / 10.0
-        self.speed_label.setText(f"速度: {self.playback_speed:.1f}x")
-        # 不需要更新定时器间隔，因为我们通过每帧样本数控制速度
+    def on_simulation_finished(self):
+        self.is_playing = False
+        self.play_btn.setText("▶ 开始")
+        QMessageBox.information(self, "完成", "仿真结束")
     
-    def update_frame(self):
-        if self.current_idx >= len(self.timestamps):
-            self.toggle_play()
-            return
+    def update_ui(self):
+        # 此时 Worker 已经因为 signal 而稍微暂停/切出，我们可以读取 detector 状态
         
-        # 根据速度计算每帧处理的样本数
-        # 16ms定时器，原始数据约10ms/样本(100Hz)
-        # 1x速度 = 16ms/10ms = 1.6个样本
-        # 100x速度 = 160个样本
-        samples_per_frame = max(1, int(self.playback_speed * 1.6))
-        
-        # 处理多个样本（算法全速运行，不受UI刷新影响）
-        for _ in range(samples_per_frame):
-            if self.current_idx >= len(self.timestamps):
-                break
+        # 使用最后处理的时间戳更新显示
+        if not self.worker.timestamps is None and self.worker.current_idx > 0:
+            # 安全读取 index
+            idx = min(self.worker.current_idx - 1, len(self.worker.timestamps) - 1)
+            ts = self.worker.timestamps[idx]
             
-            # 获取当前样本
-            ts = self.timestamps[self.current_idx]
-            ax = self.acc_data['x'][self.current_idx]
-            ay = self.acc_data['y'][self.current_idx]
-            az = self.acc_data['z'][self.current_idx]
-            
-            # 处理样本
-            result = self.detector.process_sample(ts, ax, ay, az)
-            self.current_idx += 1
-        
-        # UI性能优化：控制UI刷新频率
-        self.ui_update_counter += 1
-        if self.ui_update_counter >= self.ui_update_interval:
-            # 重置计数器并更新UI
-            self.ui_update_counter = 0
+            # ============ 更新基本显示 ============
+            self.time_label.setText(f"时间: {ts/1000:.2f}s")
         else:
-            return  # 跳过此次UI更新，但算法继续全速处理
-        
-        # 使用最后处理的样本更新显示
-        ts = self.timestamps[min(self.current_idx - 1, len(self.timestamps) - 1)]
-        
-
-        # ============ 更新基本显示 ============
-        self.time_label.setText(f"时间: {ts/1000:.2f}s")
+            return
         self.count_label.setText(f"划桨数: {self.detector._strokeCount}")
         self.rate_label.setText(f"桨频: {self.detector._strokeRate:.1f} SPM")
         
@@ -936,7 +1079,13 @@ class RealtimeSimulatorUI(QMainWindow):
                 # 自动跟踪模式：调整X轴显示最后10秒
                 if self.auto_tracking and len(t_all) > 1:
                     latest_time = t_all[-1]
-                    self.plot_widget.setXRange(max(0, latest_time - 10), latest_time + 0.5, padding=0)
+                    first_time = t_all[0]
+                    # 防止显示起始时间之前的空白区域
+                    min_x = max(first_time, latest_time - 10)
+                    # 保持至少10秒的显示范围(可选，或者让它从小范围开始变大)
+                    # 这里保持窗口总是至少10秒宽，这样一开始数据会在左边，右边是空白(未来)
+                    max_x = max(min_x + 10, latest_time + 0.5)
+                    self.plot_widget.setXRange(min_x, max_x, padding=0)
                 
                 # 动态调整Y轴范围（确保包含所有数据）
                 if len(y_all) > 0:
@@ -1002,11 +1151,47 @@ class RealtimeSimulatorUI(QMainWindow):
     
 
     def reset_simulation(self):
-        self.current_idx = 0
+        # Stop worker
+        if hasattr(self, 'worker'):
+            self.worker.stop()
+            self.worker.wait()
+            
+        # 保留当前的滤波器设置（如果有）
+        current_sr = 125.0
+        current_cutoff = 3.0
+        if hasattr(self, 'detector'):
+            current_sr = self.detector.sample_rate
+            current_cutoff = self.detector.cutoff_hz
+            
         self.detector = RealtimeStrokeDetector()
+        
+        # Re-assign detector to worker
+        if hasattr(self, 'worker'):
+            self.worker.detector = self.detector
+            self.worker.current_idx = 0
+        
+        # 恢复滤波器设置
+        if current_sr != 125.0 or current_cutoff != 3.0:
+            self.detector.sample_rate = current_sr
+            self.detector.cutoff_hz = current_cutoff
+            self.detector.filters = [
+                ButterworthFilter(cutoff_hz=current_cutoff, sample_rate=current_sr) 
+                for _ in range(3)
+            ]
+        
+        # 同步UI参数到检测器
+        if hasattr(self, 'param_inputs'):
+            for attr, spinbox in self.param_inputs.items():
+                if hasattr(self.detector, attr):
+                    setattr(self.detector, attr, spinbox.value())
+        
+        # 同步活动轴
+        if hasattr(self, 'axis_group'):
+            self.detector._activeAxis = self.axis_group.checkedId()
+            
         self.is_playing = False
         self.play_btn.setText("▶ 开始")
-        self.timer.stop()
+        
         self.curve.setData([], [])  # 清空波形
         self.peak_scatter.setData([], []) # 清空波峰
         self.trough_scatter.setData([], []) # 清空波谷
