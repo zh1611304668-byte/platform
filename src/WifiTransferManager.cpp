@@ -165,78 +165,188 @@ void WifiTransferManager::setupWebServer() {
 }
 
 void WifiTransferManager::handleRoot() {
-  // 简化HTML避免内存问题，添加下载进度显示
-  const char *html =
-      "<!DOCTYPE html><html><head><meta charset='UTF-8'><meta name='viewport' "
-      "content='width=device-width,initial-scale=1'><title>"
-      "\xE6\x95\xB0\xE6\x8D\xAE\xE4\xBC\xA0\xE8\xBE\x93</"
-      "title><style>body{font-family:Arial;margin:20px;background:#f5f5f5}.c{"
-      "max-width:900px;margin:0 "
-      "auto;background:#fff;padding:20px;border-radius:8px}h1{color:#333;"
-      "margin:0 0 "
-      "20px}.i{display:flex;justify-content:space-between;padding:12px;border-"
-      "bottom:1px solid "
-      "#eee}.n{font-weight:bold}.m{color:#999;font-size:.9em}.b{background:#"
-      "007bff;color:#fff;border:none;padding:8px "
-      "16px;border-radius:4px;cursor:pointer;text-decoration:none;transition:"
-      "background "
-      ".2s}.b:hover{background:#0056b3}.b:disabled{background:#ccc;cursor:not-"
-      "allowed}.l{text-align:center;padding:20px;color:#999}.prog{position:"
-      "fixed;bottom:20px;right:20px;background:rgba(0,0,0,.8);color:#fff;"
-      "padding:15px "
-      "20px;border-radius:8px;display:none;min-width:250px}.prog-bar{"
-      "background:#444;height:6px;border-radius:3px;margin:10px "
-      "0;overflow:hidden}.prog-fill{background:#4CAF50;height:100%;transition:"
-      "width .3s}</style></head><body><div class='c'><h1>\xF0\x9F\x9A\xA3 "
-      "\xE6\x95\xB0\xE6\x8D\xAE\xE4\xBC\xA0\xE8\xBE\x93</h1><div id='d'><div "
-      "class='l'>\xE5\x8A\xA0\xE8\xBD\xBD...</div></div></div><div "
-      "class='prog' id='prog'><div "
-      "id='prog-text'>\xE4\xB8\x8B\xE8\xBD\xBD\xE4\xB8\xAD...</div><div "
-      "class='prog-bar'><div class='prog-fill' id='prog-fill'></div></div><div "
-      "id='prog-pct'>0%</div></div><script>let downloading=false;function "
-      "load(p){fetch('/api/"
-      "list?path='+encodeURIComponent(p)).then(r=>r.json()).then(d=>{let "
-      "h='';if(!d.files||!d.files.length)h='<div "
-      "class=\"l\">\xE7\xA9\xBA</div>';else d.files.forEach(f=>{h+='<div "
-      "class=\"i\"><div><div class=\"n\">'+(f.isDir?'\xF0\x9F\x93\x81 "
-      "':'\xF0\x9F\x93\x84 ')+f.name+'</div><div "
-      "class=\"m\">'+(f.isDir?'\xE6\x96\x87\xE4\xBB\xB6\xE5\xA4\xB9':sz(f.size)"
-      ")+'</div></div>';h+=f.isDir?'<button class=\"b\" "
-      "onclick=\"load(\\''+f.path+'\\')\">\xE6\x89\x93\xE5\xBC\x80</"
-      "button>':'<button class=\"b\" "
-      "onclick=\"dl(\\''+f.path+'\\',\\''+f.name+'\\','+f.size+')\">"
-      "\xE4\xB8\x8B\xE8\xBD\xBD</button>';h+='</"
-      "div>'});document.getElementById('d').innerHTML=h}).catch(()=>document."
-      "getElementById('d').innerHTML='<div "
-      "class=\"l\">\xE5\xA4\xB1\xE8\xB4\xA5</div>')}function sz(b){return "
-      "b<1024?b+' B':b<1048576?(b/1024).toFixed(1)+' "
-      "KB':b<1073741824?(b/1048576).toFixed(1)+' "
-      "MB':(b/1073741824).toFixed(1)+' GB'}function "
-      "dl(path,name,size){if(downloading)return;downloading=true;const "
-      "prog=document.getElementById('prog');const "
-      "fill=document.getElementById('prog-fill');const "
-      "pct=document.getElementById('prog-pct');const "
-      "txt=document.getElementById('prog-text');prog.style.display='block';txt."
-      "textContent='\xE4\xB8\x8B\xE8\xBD\xBD: '+name;let loaded=0;const "
-      "xhr=new "
-      "XMLHttpRequest();xhr.open('GET','/"
-      "download?file='+encodeURIComponent(path),true);xhr.responseType='blob';"
-      "xhr.onprogress=e=>{if(e.lengthComputable){loaded=e.loaded;const "
-      "p=Math.round(e.loaded/"
-      "e.total*100);fill.style.width=p+'%';pct.textContent=p+'% "
-      "('+sz(e.loaded)+' / "
-      "'+sz(e.total)+')'}};xhr.onload=()=>{if(xhr.status===200){const "
-      "blob=xhr.response;const url=window.URL.createObjectURL(blob);const "
-      "a=document.createElement('a');a.href=url;a.download=name;a.click();"
-      "window.URL.revokeObjectURL(url);txt.textContent='"
-      "\xE5\xAE\x8C\xE6\x88\x90!';setTimeout(()=>{prog.style.display='none';"
-      "downloading=false;fill.style.width='0';pct.textContent='0%'},2000)}else{"
-      "txt.textContent='\xE5\xA4\xB1\xE8\xB4\xA5: "
-      "'+xhr.status;setTimeout(()=>{prog.style.display='none';downloading="
-      "false},3000)}};xhr.onerror=()=>{txt.textContent='"
-      "\xE7\xBD\x91\xE7\xBB\x9C\xE9\x94\x99\xE8\xAF\xAF';setTimeout(()=>{prog."
-      "style.display='none';downloading=false},3000)};xhr.send()}load('/')</"
-      "script></body></html>";
+  // Use raw string literal for the new UI
+  // NOTE: Hex escapes (\xNN) are NOT processed in raw strings, so we use JS
+  // unicode escapes or direct UTF-8
+  const char *html = R"raw(
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>数据传输</title>
+    <style>
+        :root {
+            --primary-color: #007AFF;
+            --background-color: #F2F2F7;
+            --card-background: #FFFFFF;
+            --text-primary: #1C1C1E;
+            --text-secondary: #8E8E93;
+            --separator-color: #E5E5EA;
+            --touch-highlight: rgba(0, 0, 0, 0.05);
+            --shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+            --radius-l: 20px;
+            --font-stack: -apple-system, "SF Pro Text", "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+        }
+        body {
+            font-family: var(--font-stack);
+            background-color: var(--background-color);
+            color: var(--text-primary);
+            margin: 0;
+            padding: 0;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+        .container {
+            width: 100%;
+            max-width: 640px;
+            padding: 20px;
+            box-sizing: border-box;
+        }
+        header { margin: 40px 0 24px; text-align: center; }
+        h1 { font-size: 28px; font-weight: 700; margin: 0; letter-spacing: -0.5px; }
+        .subtitle { font-size: 15px; color: var(--text-secondary); margin-top: 8px; }
+        .card {
+            background: var(--card-background);
+            border-radius: var(--radius-l);
+            box-shadow: var(--shadow);
+            overflow: hidden;
+        }
+        .file-item {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 16px 20px;
+            border-bottom: 1px solid var(--separator-color);
+            cursor: pointer;
+            -webkit-tap-highlight-color: transparent;
+        }
+        .file-item:last-child { border-bottom: none; }
+        .file-item:active { background-color: var(--touch-highlight); }
+        .file-info { display: flex; align-items: center; flex: 1; min-width: 0; }
+        .file-icon { font-size: 24px; margin-right: 16px; width: 32px; text-align: center; }
+        .file-details { display: flex; flex-direction: column; overflow: hidden; }
+        .file-name { font-size: 17px; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .file-meta { font-size: 13px; color: var(--text-secondary); margin-top: 2px; }
+        .action-icon { color: var(--primary-color); margin-left: 12px; font-size: 20px; opacity: 0.8; }
+        .empty-state { padding: 40px; text-align: center; color: var(--text-secondary); }
+        .overlay {
+            position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+            background: rgba(0, 0, 0, 0.4);
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+            z-index: 1000;
+            display: none;
+            align-items: center; justify-content: center;
+            opacity: 0; transition: opacity 0.3s ease;
+        }
+        .overlay.visible { opacity: 1; }
+        .progress-card {
+            background: var(--card-background);
+            padding: 30px;
+            border-radius: var(--radius-l);
+            width: 80%; max-width: 320px;
+            text-align: center;
+            box-shadow: 0 8px 30px rgba(0, 0, 0, 0.12);
+        }
+        .progress-title { font-size: 17px; font-weight: 600; margin-bottom: 20px; }
+        .progress-bar-bg { background-color: var(--separator-color); height: 6px; border-radius: 3px; overflow: hidden; margin-bottom: 12px; }
+        .progress-bar-fill { height: 100%; background-color: var(--primary-color); width: 0%; transition: width 0.2s ease; }
+        .progress-text { font-size: 13px; color: var(--text-secondary); font-variant-numeric: tabular-nums; }
+        footer { margin-top: 40px; color: var(--text-secondary); font-size: 12px; text-align: center; padding-bottom: 20px; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>数据传输</h1>
+            <div class="subtitle">WiFi File Transfer</div>
+        </header>
+        <div class="card">
+            <div id="file-list-container" class="file-list">
+                <div class="empty-state">加载中...</div>
+            </div>
+        </div>
+        <footer>Rowing Performance Monitor</footer>
+    </div>
+    <div id="overlay" class="overlay">
+        <div class="progress-card">
+            <div class="progress-title">下载中...</div>
+            <div class="progress-bar-bg"><div id="progress-fill" class="progress-bar-fill"></div></div>
+            <div id="progress-text" class="progress-text">0%</div>
+        </div>
+    </div>
+    <script>
+        let downloading = false;
+        let currentPath = '/';
+        
+        function formatSize(b){if(b===0)return'0 B';const k=1024,s=['B','KB','MB','GB'],i=Math.floor(Math.log(b)/Math.log(k));return parseFloat((b/Math.pow(k,i)).toFixed(1))+' '+s[i]}
+        
+        function renderList(files){
+            const c=document.getElementById('file-list-container');
+            let h='';
+            
+            // Add back button if not root
+            if(currentPath !== '/' && currentPath !== '') {
+                let parent = currentPath.substring(0, currentPath.lastIndexOf('/'));
+                if(parent === '') parent = '/';
+                h += `<div class="file-item" onclick="load('${parent}')"><div class="file-info"><div class="file-icon">\u21A9</div><div class="file-details"><div class="file-name">.. (\u8FD4\u56DE\u4E0A\u4E00\u7EA7)</div></div></div></div>`;
+            }
+
+            if(!files||!files.length){
+                if(h === '') c.innerHTML='<div class="empty-state">暂无文件</div>';
+                else c.innerHTML=h;
+                return;
+            }
+            
+            files.forEach(f=>{
+                const icon=f.isDir?'\u{1F4C1}':'\u{1F4C4}';
+                const meta=f.isDir?'文件夹':formatSize(f.size);
+                const act=f.isDir?`load('${f.path}')`: `download('${f.path}','${f.name}')`;
+                h+=`<div class="file-item" onclick="${act}"><div class="file-info"><div class="file-icon">${icon}</div><div class="file-details"><div class="file-name">${f.name}</div><div class="file-meta">${meta}</div></div></div><div class="action-icon">${f.isDir?'\u203A':'\u2193'}</div></div>`
+            });
+            c.innerHTML=h;
+        }
+        
+        function load(p){
+            currentPath = p;
+            fetch('/api/list?path='+encodeURIComponent(p)).then(r=>r.json()).then(d=>renderList(d.files)).catch(()=>document.getElementById('file-list-container').innerHTML='<div class="empty-state">加载失败</div>');
+        }
+        function download(path,name){
+            // Use native browser download to avoid memory buffering lag
+            const a = document.createElement('a');
+            a.href = '/download?file=' + encodeURIComponent(path);
+            a.download = name;
+            a.style.display = 'none';
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+
+            // Show simple "Started" toast
+            const ov=document.getElementById('overlay'),txt=document.getElementById('progress-text');
+            const bg=document.querySelector('.progress-bar-bg');
+            if(bg) bg.style.display='none'; // Hide progress bar
+            
+            txt.textContent = '下载已开始...';
+            ov.style.display='flex';
+            setTimeout(() => { ov.classList.add('visible'); }, 10);
+            
+            // Hide toast after 2 seconds
+            setTimeout(()=>{
+                ov.classList.remove('visible');
+                setTimeout(()=>{
+                    ov.style.display='none';
+                    if(bg) bg.style.display='block'; // Reset for potential reuse
+                },300);
+            }, 2000);
+        }
+        load('/');
+    </script>
+</body>
+</html>
+)raw";
 
   server->send(200, "text/html", html);
 }
@@ -304,11 +414,10 @@ void WifiTransferManager::handleFileDownload() {
 
   // 发送响应头
   server->setContentLength(file.size());
-  server->sendHeader("Content-Type", contentType);
   server->sendHeader("Content-Disposition",
                      "attachment; filename=\"" + fileName + "\"");
   server->sendHeader("Cache-Control", "no-cache");
-  server->send(200);
+  server->send(200, contentType, "");
 
   // 手动分块传输，每次重置看门狗
   const size_t CHUNK_SIZE = 1024; // 1KB chunks
@@ -334,9 +443,9 @@ void WifiTransferManager::handleFileDownload() {
 }
 
 String WifiTransferManager::listDirectory(const String &path) {
-  // 使用更大的缓冲区以支持更多文件
-  StaticJsonDocument<8192> doc;
-  JsonArray filesArray = doc.createNestedArray("files");
+  // Use JsonDocument instead of deprecated StaticJsonDocument
+  JsonDocument doc;
+  JsonArray filesArray = doc["files"].to<JsonArray>();
 
   File root = SD_MMC.open(path.c_str());
   if (!root || !root.isDirectory()) {
@@ -353,7 +462,7 @@ String WifiTransferManager::listDirectory(const String &path) {
 
   File file = root.openNextFile();
   while (file && fileCount < MAX_FILES) {
-    JsonObject fileObj = filesArray.createNestedObject();
+    JsonObject fileObj = filesArray.add<JsonObject>();
     String fileName = String(file.name());
 
     // 获取完整路径
