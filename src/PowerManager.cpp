@@ -622,33 +622,9 @@ void PowerManager::shutdown() {
       "[PowerManager] System entering sleep mode, press PWRKEY to wake up");
   delay(100); // 确保串口输出完成
 
-  // 与示例程序完全一致的关机流程
-  // Set the wake-up source to PWRKEY
-  power.wakeupControl(XPOWERS_AXP2101_WAKEUP_IRQ_PIN_TO_LOW, true);
-
-  // Set sleep flag
-  power.enableSleep();
-
-  // 关闭所有电源轨道（与示例程序顺序完全一致）
-  power.disableDC2();
-  power.disableDC3();
-  power.disableDC4();
-  power.disableDC5();
-
-  power.disableALDO1();
-  power.disableALDO2();
-  power.disableALDO3();
-  power.disableALDO4();
-
-  power.disableBLDO1();
-  power.disableBLDO2();
-
-  power.disableCPUSLDO();
-  power.disableDLDO1();
-  power.disableDLDO2();
-
-  // Finally, turn off the power of the control chip
-  power.disableDC1();
+  // 使用XPowersLib提供的标准关机函数
+  // 这会关闭所有电源输出 (除了VRTC)，并允许通过PEK(电源键)唤醒
+  power.shutdown();
 }
 
 // 检查是否请求关机

@@ -461,6 +461,8 @@ void loop() {
     loopWdtRegistered = true;
   }
 
+  static unsigned long lastSystemInteractionTime =
+      millis(); // 记录最后一次系统交互(按键/训练)时间
   unsigned long now = millis();
 
   // High frequency sensor update
@@ -722,6 +724,7 @@ void loop() {
 
   KeyEvent event;
   while (xQueueReceive(keyQueue, &event, 0) == pdTRUE) {
+    lastSystemInteractionTime = now; // 按键重置计时器
     switch (event.pin) {
     case K1_PIN:
       if (event.action) {
@@ -1505,6 +1508,36 @@ void loop() {
       powerMgr.updateBatteryUI();
     }
     lastMinuteBatteryUIUpdate = now;
+  }
+
+  if (xQueueReceive(keyQueue, &event, 0) == pdTRUE) {
+    lv_timer_handler();
+  }
+
+  // ==========================================================================================
+  // 自动关机逻辑 (5分钟无操作且不在训练模式)
+  // ==========================================================================================
+
+  // 1. 如果在训练模式，不断重置计时器
+  if (training.isActive()) {
+    lastSystemInteractionTime = now;
+  }
+
+  // 2. 如果K4正在被长按 (k4IsPressed)
+  if (k4IsPressed) {
+    lastSystemInteractionTime = now;
+  }
+
+  // 3. 触摸屏活跃时间 (LVGL自动维护)
+  uint32_t touchInactiveTime = lv_disp_get_inactive_time(NULL);
+
+  const unsigned long AUTO_SHUTDOWN_TIMEOUT = 300000;
+
+  if ((now - lastSystemInteractionTime > AUTO_SHUTDOWN_TIMEOUT) &&
+      (touchInactiveTime > AUTO_SHUTDOWN_TIMEOUT) && !training.isActive()) {
+
+    Serial.println("[System] 💤 自动关机触发 (5分钟无操作)");
+    powerMgr.shutdown();
   }
 
   delay(5);
