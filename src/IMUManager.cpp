@@ -235,6 +235,11 @@ void IMUManager::_calculateStrokeRate() {
     }
 
     // 只有连续多个采样点都在恢复区才确认恢复
+    // 【改进】如果信号已经过零（变正），说明已经开始下一划的趋势，强制结束当前划桨
+    if (deviation > 0.0f) {
+      _recoveryCounter = RECOVERY_SAMPLES; // 强制满足条件
+    }
+
     if (_recoveryCounter >= RECOVERY_SAMPLES) {
       uint32_t trough_duration = now - _phaseStartTime;
       if (trough_duration >= MIN_TROUGH_DURATION) {
@@ -242,9 +247,10 @@ void IMUManager::_calculateStrokeRate() {
         float amplitude = _peakMaxValue - _troughMinValue;
 
         if (amplitude >= MIN_AMPLITUDE) {
-          // 检查间隔
-          if (_lastStrokeTime == 0 ||
-              (_peakMaxTime - _lastStrokeTime) >= STROKE_MIN_INTERVAL) {
+          // 检查间隔 (DISABLED: 为了对比SpeedCoach，完全依赖波形)
+          // if (_lastStrokeTime == 0 ||
+          //     (_peakMaxTime - _lastStrokeTime) >= STROKE_MIN_INTERVAL) {
+          if (true) {
             // ✅ 确认划桨!
             if (_lastStrokeTime > 0) {
               uint32_t interval = _peakMaxTime - _lastStrokeTime;

@@ -3,6 +3,7 @@
 按时间窗口逐步处理数据，模拟ESP32真实运行环境
 """
 import sys
+import os
 import time
 from collections import deque
 import numpy as np
@@ -105,25 +106,25 @@ class RealtimeStrokeDetector:
     
     def __init__(self):
         # ============ 可调参数 ============
-        self.WINDOW_SIZE = 200  # 滑动窗口大小(用于计算背景均值) - 200点=2秒@100Hz
+        self.WINDOW_SIZE = 125  # 滑动窗口大小 - 125点*16ms = 2秒
 
 
         
         # 动态阈值系数 (相对于背景标准差)
-        self.PEAK_ENTER_FACTOR = 1.5   # 进入波峰区的阈值 = mean + factor * std (与C++固件一致)
-        self.PEAK_EXIT_FACTOR = 0.5    # 离开波峰区(进入波谷)的阈值
-        self.TROUGH_THRESHOLD = -0.02  # 绝对波谷阈值(低于均值多少算波谷区)
-        self.RECOVERY_FACTOR = 1.3     # 恢复到背景的阈值
+        self.PEAK_ENTER_FACTOR = 0.8   # 进入波峰区的阈值 = mean + factor * std (降低以提高灵敏度)
+        self.PEAK_EXIT_FACTOR = 0.4    # 离开波峰区(进入波谷)的阈值
+        self.TROUGH_THRESHOLD = -0.005 # 绝对波谷阈值(低于均值多少算波谷区)
+        self.RECOVERY_FACTOR = 1.0     # 恢复到背景的阈值
         
         # 绝对阈值(防止噪声过小时误触发) - 与C++固件完全一致
-        self.MIN_PEAK_ABSOLUTE = 0.08 # 波峰最小绝对高度 (g)
+        self.MIN_PEAK_ABSOLUTE = 0.04 # 波峰最小绝对高度 (g)
         self.MIN_AMPLITUDE = 0.05   # 最小峰谷振幅 (g)
         
         # 时间参数
-        self.MIN_PEAK_DURATION = 30    # 波峰区最小持续时间(ms) - 降低
-        self.MIN_TROUGH_DURATION = 50  # 波谷区最小持续时间(ms) - 降低
+        self.MIN_PEAK_DURATION = 15    # 波峰区最小持续时间(ms) - 适配62.5Hz
+        self.MIN_TROUGH_DURATION = 30  # 波谷区最小持续时间(ms) - 适配62.5Hz
         self.STROKE_MIN_INTERVAL = 150 # 两次划桨最小间隔(ms)
-        self.COOLDOWN_DURATION = 300   # 冷却时间(ms)
+        self.COOLDOWN_DURATION = 100   # 冷却时间(ms)
         
         self.DEBUG = True
         
@@ -387,6 +388,10 @@ class RealtimeStrokeDetector:
                 self._recoveryCounter = 0  # 不在恢复区，重置计数
             
             # 只有连续多个采样点都在恢复区才确认恢复
+            # 【改进】如果信号已经过零（变正），说明已经开始下一划的趋势，强制结束当前划桨
+            if deviation > 0:
+                self._recoveryCounter = self.RECOVERY_SAMPLES
+
             if self._recoveryCounter >= self.RECOVERY_SAMPLES:
                 trough_duration = timestamp_ms - self._phaseStartTime
                 if trough_duration >= self.MIN_TROUGH_DURATION:
@@ -398,9 +403,10 @@ class RealtimeStrokeDetector:
                         print(f"[恢复到背景] 振幅={amplitude:.3f}g (需要>{self.MIN_AMPLITUDE}g)")
                     
                     if amplitude >= self.MIN_AMPLITUDE:
-                        # 检查间隔
-                        if self._lastStrokeTime == 0 or \
-                           (self._peakMaxTime - self._lastStrokeTime) >= self.STROKE_MIN_INTERVAL:
+                        # 检查间隔 (DISABLED: 为了对比SpeedCoach，完全依赖波形)
+                        # if self._lastStrokeTime == 0 or \
+                        #    (self._peakMaxTime - self._lastStrokeTime) >= self.STROKE_MIN_INTERVAL:
+                        if True:
                             # ✅ 确认划桨!
                             if self._lastStrokeTime > 0:
                                 interval = self._peakMaxTime - self._lastStrokeTime
@@ -691,6 +697,11 @@ class RealtimeSimulatorUI(QMainWindow):
         )
         self.plot_widget.addItem(self.trough_scatter)
         
+        # Try to load the continuous pushing log by default for testing
+        default_log = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'data/imu_log_045.csv')
+        if os.path.exists(default_log):
+            QTimer.singleShot(100, lambda: self.load_data(default_log))
+            
         self.stroke_regions = []
         
         # 图例
@@ -886,12 +897,14 @@ class RealtimeSimulatorUI(QMainWindow):
             self.tracking_btn.setStyleSheet("")
             self.tracking_btn.setText("❌ 跟踪")
     
-    def load_data(self):
-        file, _ = QFileDialog.getOpenFileName(self, "选择CSV", "", "CSV (*.csv)")
-        if not file:
+    def load_data(self, file_path=None):
+        if not file_path:
+            file_path, _ = QFileDialog.getOpenFileName(self, "选择CSV", "", "CSV (*.csv)")
+        
+        if not file_path:
             return
         
-        df = pd.read_csv(file)
+        df = pd.read_csv(file_path)
         
         # 检测格式
         if 'timestamp' in df.columns and 'acc_y' in df.columns:
@@ -920,6 +933,8 @@ class RealtimeSimulatorUI(QMainWindow):
             print(f"采样率: ~{actual_sample_rate:.1f} Hz")
             
             # ⚠️ 关键修复：根据实际采样率调整截止频率
+            # Auto-start for testing
+            QTimer.singleShot(500, self.toggle_play)
         else:
             QMessageBox.warning(self, "错误", "CSV需要包含 timestamp, acc_x, acc_y, acc_z 列")
             return

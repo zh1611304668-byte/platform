@@ -14,6 +14,7 @@
 #define IMU_MANAGER_H
 
 #include "SensorQMI8658.hpp"
+#include <Arduino.h>
 #include <Wire.h>
 #include <algorithm>
 #include <cmath>
@@ -66,7 +67,7 @@ public:
   /// @name 采样参数
   /// @{
   static constexpr int WINDOW_SIZE =
-      200; ///< 滑动窗口(采样点) - 300点=3秒@100Hz
+      125; ///< 滑动窗口(采样点) - 125点*16ms = 2秒
 
   static constexpr uint32_t SAMPLE_INTERVAL = 16; ///< 采样间隔(ms) - 62.5Hz
   /// @}
@@ -74,9 +75,10 @@ public:
   /// @name 动态阈值参数
   /// @{
   static constexpr float PEAK_ENTER_FACTOR =
-      1.4f; ///< 进入波峰区阈值系数 (factor * std)
-  static constexpr float TROUGH_THRESHOLD = -0.02f; ///< 波谷阈值 (g)
-  static constexpr float RECOVERY_FACTOR = 1.2f;    ///< 恢复阈值系数
+      0.8f; ///< 进入波峰区阈值系数 (factor * std) - 降低以提高灵敏度
+  static constexpr float TROUGH_THRESHOLD =
+      -0.005f;                                   ///< 波谷阈值 (g) - 提高灵敏度
+  static constexpr float RECOVERY_FACTOR = 1.0f; ///< 恢复阈值系数
   static constexpr float MIN_PEAK_ABSOLUTE = 0.04f; ///< 波峰最小绝对高度 (g)
   static constexpr float MIN_AMPLITUDE = 0.03f;     ///< 最小峰谷振幅 (g)
 
@@ -84,14 +86,16 @@ public:
 
   /// @name 时间参数
   /// @{
-  static constexpr uint32_t MIN_PEAK_DURATION = 30; ///< 波峰区最小持续时间(ms)
+  static constexpr uint32_t MIN_PEAK_DURATION =
+      15; ///< 波峰区最小持续时间(ms) - 捕捉2采样点波峰
   static constexpr uint32_t MIN_TROUGH_DURATION =
-      50; ///< 波谷区最小持续时间(ms)
+      30; ///< 波谷区最小持续时间(ms)
   static constexpr uint32_t STROKE_MIN_INTERVAL =
       150; ///< 两次划桨最小间隔(ms) - 支持最高120SPM
-  static constexpr uint32_t COOLDOWN_DURATION = 100; ///< 冷却时间(ms)
-  static constexpr uint32_t STROKE_TIMEOUT = 8000;   ///< 超时重置(ms)
-  static constexpr int RECOVERY_SAMPLES = 5;         ///< 恢复检测连续采样数
+  static constexpr uint32_t COOLDOWN_DURATION =
+      100; ///< 冷却时间(ms) - 几乎无冷却
+  static constexpr uint32_t STROKE_TIMEOUT = 8000; ///< 超时重置(ms)
+  static constexpr int RECOVERY_SAMPLES = 5;       ///< 恢复检测连续采样数
   /// @}
 
   /// @name 滤波参数

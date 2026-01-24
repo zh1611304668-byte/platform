@@ -995,6 +995,51 @@ void loop() {
     lastCellularProcess = now;
   }
 
+  // 检查是否有新划桨数据（事件驱动 - 立即更新，不受 100/200ms 限制）
+  if (imu.hasNewStroke()) {
+    const StrokeMetrics &metrics = imu.getLastStrokeMetrics();
+
+    // 更新全局变量（保持兼容性）
+    strokeRate = imu.getStrokeRate();
+    strokeLength = metrics.strokeDistance;
+    totalDistance = metrics.totalDistance;
+    strokeCount = metrics.strokeNumber; // 更新全局变量
+    int currentStrokeCount = strokeCount;
+    float currentSpeedMps = gnss.getSpeed();
+
+    // 更新 ConfigManager
+    configManager.safeUpdateSensorData(strokeRate, currentSpeedMps,
+                                       currentStrokeCount, totalDistance);
+
+    // 更新 UI 显示
+    char tmp[16];
+    snprintf(tmp, sizeof(tmp), "%.1f", strokeRate);
+    lv_label_set_text(ui_Label9, tmp);
+
+    snprintf(tmp, sizeof(tmp), "%d", currentStrokeCount);
+    lv_label_set_text(ui_Label44, tmp);
+    lv_label_set_text(ui_Label64, tmp);
+
+    snprintf(tmp, sizeof(tmp), "%.1f", strokeLength);
+    lv_label_set_text(ui_Label12, tmp);
+    lv_label_set_text(ui_Label56, tmp);
+
+    snprintf(tmp, sizeof(tmp), "%.3f", totalDistance / 1000.0f);
+    lv_label_set_text(ui_Label23, tmp);
+    lv_label_set_text(ui_Label60, tmp);
+
+    // 触发训练逻辑和数据捕获
+    training.onStrokeDetected();
+    strokeDataMgr.captureStroke(currentStrokeCount);
+
+    // 清除标志
+    imu.clearNewStrokeFlag();
+    lastStrokeCount = currentStrokeCount;
+
+    // 立即同步数据绑定
+    updateBoundData();
+  }
+
   uint32_t sensorUpdateInterval =
       (safeGetCurrentScreen() == SCREEN3) ? 100 : 200;
   if (now - lastSensorUIUpdate > sensorUpdateInterval) {
@@ -1008,7 +1053,7 @@ void loop() {
                                     tempStrokeCount, tempTotalDistance);
     configManager.safeGetTimeData(displayLocalTime);
 
-    // **优化：速度/功率/配速每秒刷新一次（1Hz），避免10Hz刷新导致的显示抖动**
+    // 速度/功率/配速每秒刷新一次（1Hz）
     static uint32_t lastSpeedPowerPaceUpdate = 0;
     if (now - lastSpeedPowerPaceUpdate > 1000) {
       snprintf(tmp, sizeof(tmp), "%.1f", displaySpeedMps);
@@ -1087,56 +1132,10 @@ void loop() {
       }
     }
 
-    // imu.update() moved to main loop for high frequency polling
-
-    // 检查是否有新划桨数据（事件驱动）
-    if (imu.hasNewStroke()) {
-      const StrokeMetrics &metrics = imu.getLastStrokeMetrics();
-
-      // 更新全局变量（保持兼容性）
-      strokeRate = imu.getStrokeRate();
-      strokeLength = metrics.strokeDistance;
-      totalDistance = metrics.totalDistance;
-      strokeCount = metrics.strokeNumber; // 更新全局变量，确保JSON数据对齐
-      int currentStrokeCount = strokeCount;
-      float currentSpeedMps = gnss.getSpeed();
-
-      // 更新 ConfigManager
-      configManager.safeUpdateSensorData(strokeRate, currentSpeedMps,
-                                         currentStrokeCount, totalDistance);
-
-      // 更新 UI 显示
-      snprintf(tmp, sizeof(tmp), "%.1f", strokeRate);
-      lv_label_set_text(ui_Label9, tmp);
-
-      snprintf(tmp, sizeof(tmp), "%d", currentStrokeCount);
-      lv_label_set_text(ui_Label44, tmp);
-      lv_label_set_text(ui_Label64, tmp);
-
-      snprintf(tmp, sizeof(tmp), "%.1f", strokeLength);
-      lv_label_set_text(ui_Label12, tmp);
-      lv_label_set_text(ui_Label56, tmp);
-
-      snprintf(tmp, sizeof(tmp), "%.3f", totalDistance / 1000.0f);
-      lv_label_set_text(ui_Label23, tmp);
-      lv_label_set_text(ui_Label60, tmp);
-
-      // 触发训练逻辑和数据捕获
-      training.onStrokeDetected();
-      strokeDataMgr.captureStroke(currentStrokeCount);
-
-      // 清除标志
-      imu.clearNewStrokeFlag();
-      lastStrokeCount = currentStrokeCount;
-    } else {
-      // 即使没有新划桨，也更新总距离显示（因为总距离可能在非划桨期间变化吗？通常不会，但为了保险）
-      // 这里我们只更新非划桨相关的实时数据，如速度
-      // 注意：strokeRate 等在不划桨时会衰减，需要从 IMU 获取实时值
-
-      float currentRate = imu.getStrokeRate();
-      snprintf(tmp, sizeof(tmp), "%.1f", currentRate);
-      lv_label_set_text(ui_Label9, tmp);
-    }
+    // 定期更新模式：仅更新衰减的桨频（如果有新划桨刚才已经更新过了）
+    float currentRate = imu.getStrokeRate();
+    snprintf(tmp, sizeof(tmp), "%.1f", currentRate);
+    lv_label_set_text(ui_Label9, tmp);
 
     training.update();
     updateBoundData();
