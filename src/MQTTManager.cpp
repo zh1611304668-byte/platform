@@ -252,9 +252,6 @@ float calculateTimeDifference(const String &timestamp1,
   double diff_ms = (ms2 - ms1) / 1000.0;
   float result = (float)(diff_sec + diff_ms);
 
-  Serial.printf("[TIME] 时间差: %s → %s = %.3f 秒\n", timestamp1.c_str(),
-                timestamp2.c_str(), result);
-
   return result;
 }
 

@@ -1,4 +1,5 @@
 #include "BluetoothManager.h"
+#include "BrightnessManager.h"
 #include "CellularManager.h"
 #include "ConfigManager.h"
 #include "DataFlowManager.h"
@@ -60,6 +61,7 @@ PowerManager powerMgr;
 SensorPCF85063 rtc;
 SDCardManager sdCardManager;
 WifiTransferManager wifiTransfer;
+BrightnessManager brightness(GFX_BL, 0);
 
 SemaphoreHandle_t serial4GMutex = nullptr;
 bool configLoadingInProgress = false;
@@ -278,8 +280,8 @@ void setup() {
   gfx->fillScreen(RGB565_BLACK);
 
 #ifdef GFX_BL
-  pinMode(GFX_BL, OUTPUT);
-  digitalWrite(GFX_BL, HIGH);
+  // 使用BrightnessManager初始化PWM控制，替代简单的开关控制
+  brightness.begin();
 #endif
 
   screenWidth = gfx->width();
@@ -471,6 +473,13 @@ void loop() {
     wifiTransfer.update();
   }
   esp_task_wdt_reset();
+
+  // 屏幕亮度管理更新 (每100ms检查一次)
+  static unsigned long lastBrightnessUpdate = 0;
+  if (now - lastBrightnessUpdate > 100) {
+    brightness.update(now, training.isActive(), lastSystemInteractionTime);
+    lastBrightnessUpdate = now;
+  }
 
   static unsigned long lastLogTime = 0;
   static unsigned long lastSdStatusPrint = 0;
@@ -725,6 +734,7 @@ void loop() {
   KeyEvent event;
   while (xQueueReceive(keyQueue, &event, 0) == pdTRUE) {
     lastSystemInteractionTime = now; // 按键重置计时器
+    brightness.resetInteraction();   // 立即恢复最高亮度
     switch (event.pin) {
     case K1_PIN:
       if (event.action) {

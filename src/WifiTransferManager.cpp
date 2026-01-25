@@ -50,7 +50,7 @@ bool WifiTransferManager::start() {
   server->begin();
 
   active = true;
-  Serial.println("[WiFi传输] ✅ WiFi传输模式已启动");
+  Serial.println("[WiFi传输] WiFi传输模式已启动");
   Serial.printf("[WiFi传输] SSID: %s\n", ssid.c_str());
   Serial.printf("[WiFi传输] IP地址: %s\n", WiFi.softAPIP().toString().c_str());
   Serial.printf("[WiFi传输] 访问地址: http://%s\n",
@@ -77,7 +77,7 @@ void WifiTransferManager::stop() {
   teardownWiFi();
 
   active = false;
-  Serial.println("[WiFi传输] ✅ WiFi传输模式已停止");
+  Serial.println("[WiFi传输] WiFi传输模式已停止");
 }
 
 void WifiTransferManager::update() {
@@ -137,15 +137,23 @@ bool WifiTransferManager::setupWiFiAP() {
     return false;
   }
 
-  Serial.printf("[WiFi传输] ✅ AP已启动 - SSID: %s\n", ssid.c_str());
-  Serial.printf("[WiFi传输] ✅ IP: %s\n", ip.toString().c_str());
+  Serial.printf("[WiFi传输] AP已启动 - SSID: %s\n", ssid.c_str());
+  Serial.printf("[WiFi传输] IP: %s\n", ip.toString().c_str());
 
   return true;
 }
 
 void WifiTransferManager::teardownWiFi() {
+  // 1. 先断开所有AP客户端连接
   WiFi.softAPdisconnect(true);
+  delay(200); // 等待客户端断开连接
+
+  // 2. 关闭WiFi模式
   WiFi.mode(WIFI_OFF);
+  delay(500); // 增加延迟，确保WiFi完全反初始化
+
+  // 3. 彻底断开WiFi（清理内部状态）
+  WiFi.disconnect(true);
   delay(100);
 }
 
@@ -409,7 +417,7 @@ void WifiTransferManager::handleFileDownload() {
   String contentType = getContentType(filePath);
   String fileName = filePath.substring(filePath.lastIndexOf('/') + 1);
 
-  Serial.printf("[WiFi传输] ✅ 开始传输: %s (%.2f KB)\n", fileName.c_str(),
+  Serial.printf("[WiFi传输] 开始传输: %s (%.2f KB)\n", fileName.c_str(),
                 file.size() / 1024.0);
 
   // 发送响应头
@@ -439,7 +447,7 @@ void WifiTransferManager::handleFileDownload() {
   }
 
   file.close();
-  Serial.printf("[WiFi传输] ✅ 传输完成: %d bytes\n", totalSent);
+  Serial.printf("[WiFi传输] 传输完成: %d bytes\n", totalSent);
 }
 
 String WifiTransferManager::listDirectory(const String &path) {

@@ -184,8 +184,10 @@ void IMUManager::_calculateStrokeRate() {
 
     // 检测是否进入波谷区(偏差变负)
     if (deviation < TROUGH_THRESHOLD) {
-      uint32_t peak_duration = now - _phaseStartTime;
-      if (peak_duration >= MIN_PEAK_DURATION) {
+      // 波峰持续时间检查 (DISABLED: 简化检测，只要进入波谷就确认波峰)
+      // uint32_t peak_duration = now - _phaseStartTime;
+      // if (peak_duration >= MIN_PEAK_DURATION) {
+      if (true) {
         _strokeState = STATE_TROUGH_ZONE;
         _phaseStartTime = now;
         _troughMinValue = deviation;
@@ -240,9 +242,12 @@ void IMUManager::_calculateStrokeRate() {
       _recoveryCounter = RECOVERY_SAMPLES; // 强制满足条件
     }
 
+    // 恢复期检查：确保波谷已经结束，信号开始回升
     if (_recoveryCounter >= RECOVERY_SAMPLES) {
-      uint32_t trough_duration = now - _phaseStartTime;
-      if (trough_duration >= MIN_TROUGH_DURATION) {
+      // 波谷持续时间检查 (DISABLED: 简化检测，只要回升就确认)
+      // uint32_t trough_duration = now - _phaseStartTime;
+      // if (trough_duration >= MIN_TROUGH_DURATION) {
+      if (true) {
         // 计算振幅
         float amplitude = _peakMaxValue - _troughMinValue;
 

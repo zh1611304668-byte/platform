@@ -13,7 +13,7 @@ PowerManager::~PowerManager() {
 }
 
 bool PowerManager::begin() {
-  // 初始化I2C通信
+  // 初始化I2C通信（XPowersLib强制要求4个参数，会有重复初始化警告但无影响）
   bool result = power.begin(Wire, AXP2101_SLAVE_ADDRESS, PMU_SDA, PMU_SCL);
 
   if (!result) {
@@ -24,7 +24,7 @@ bool PowerManager::begin() {
   // 只配置电源轨道，不配置充电
   configurePowerRails();
 
-  // 恢复充电配置，不要移除configureCharging()调用
+  // 恢复充电配置
   configureCharging();
 
   // 简化中断配置，只保留电池检测
