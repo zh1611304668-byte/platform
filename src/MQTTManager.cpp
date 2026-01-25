@@ -1241,6 +1241,9 @@ void mqttTask(void *pvParameters) {
 
                 esp_task_wdt_reset();
 
+                // 异步写入SD卡（在MQTT任务中执行，不阻塞主循环）
+                sdCardManager.logStrokeSnapshot(snapshot);
+
                 String strokeJson = generateStrokeJSON(snapshot);
 
                 if (!strokeJson.isEmpty() && !topicTrainStroke.isEmpty()) {

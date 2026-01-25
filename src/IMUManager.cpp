@@ -66,6 +66,10 @@ void IMUManager::update() {
 }
 
 void IMUManager::_initSensor() {
+  // 确保 Wire 初始化并在此时设置频率
+  Wire.begin(_sda, _scl);
+  Wire.setClock(100000); // 降低到 100kHz 以提高稳定性
+
   if (!_qmi.begin(Wire, QMI8658_L_SLAVE_ADDRESS, _sda, _scl)) {
     _sensorFound = false;
     return;
@@ -272,18 +276,33 @@ void IMUManager::_calculateStrokeRate() {
             _lastStrokeTime = _peakMaxTime;
             _hasNewStroke = true;
 
+            // 获取当前GPS位置并设置到Metrics
+            double currentLat = 0.0;
+            double currentLon = 0.0;
+            if (_gnss != nullptr) {
+              currentLat = _gnss->getLatitude();
+              currentLon = _gnss->getLongitude();
+            }
+
             // 更新Metrics
             _lastStrokeMetrics.strokeNumber = _strokeCount;
             _lastStrokeMetrics.timestamp = _peakMaxTime;
-            _lastStrokeMetrics.totalDistance = _totalDistance;
 
-            // GNSS
-            if (_gnss != nullptr) {
-              _gnss->getInterpolatedPosition(_peakMaxTime);
+            // 设置GPS坐标：起点是前一桨的位置，终点是当前位置
+            _lastStrokeMetrics.startLat = _prevStrokeLat;
+            _lastStrokeMetrics.startLon = _prevStrokeLon;
+            _lastStrokeMetrics.endLat = currentLat;
+            _lastStrokeMetrics.endLon = currentLon;
+
+            // 更新前一桨的位置为当前位置（用于下一桨）
+            if (currentLat != 0.0 && currentLon != 0.0) {
+              _prevStrokeLat = currentLat;
+              _prevStrokeLon = currentLon;
             }
 
-            Serial.printf("✅ [划桨确认] #%d, 振幅=%.3fg, 桨频=%.1f\n",
-                          _strokeCount, amplitude, _strokeRate);
+            Serial.printf(
+                "✅ [划桨确认] #%d, 振幅=%.3fg, 桨频=%.1f, 距离=%.2fm\n",
+                _strokeCount, amplitude, _strokeRate, _strokeDistance);
 
             _strokeState = STATE_COOLDOWN;
             _phaseStartTime = now;

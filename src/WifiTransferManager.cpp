@@ -221,6 +221,7 @@ void WifiTransferManager::handleRoot() {
             border-radius: var(--radius-l);
             box-shadow: var(--shadow);
             overflow: hidden;
+            margin-bottom: 20px;
         }
         .file-item {
             display: flex;
@@ -240,6 +241,29 @@ void WifiTransferManager::handleRoot() {
         .file-meta { font-size: 13px; color: var(--text-secondary); margin-top: 2px; }
         .action-icon { color: var(--primary-color); margin-left: 12px; font-size: 20px; opacity: 0.8; }
         .empty-state { padding: 40px; text-align: center; color: var(--text-secondary); }
+        
+        .pagination {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 15px 20px;
+            background-color: var(--card-background);
+            border-radius: var(--radius-l);
+            box-shadow: var(--shadow);
+        }
+        .page-btn {
+            background: none;
+            border: none;
+            color: var(--primary-color);
+            font-size: 16px;
+            padding: 10px 15px;
+            cursor: pointer;
+            border-radius: 8px;
+        }
+        .page-btn:disabled { color: var(--text-secondary); cursor: default; opacity: 0.5; }
+        .page-btn:active:not(:disabled) { background-color: var(--touch-highlight); }
+        .page-info { font-size: 14px; color: var(--text-secondary); }
+
         .overlay {
             position: fixed; top: 0; left: 0; right: 0; bottom: 0;
             background: rgba(0, 0, 0, 0.4);
@@ -263,7 +287,7 @@ void WifiTransferManager::handleRoot() {
         .progress-bar-bg { background-color: var(--separator-color); height: 6px; border-radius: 3px; overflow: hidden; margin-bottom: 12px; }
         .progress-bar-fill { height: 100%; background-color: var(--primary-color); width: 0%; transition: width 0.2s ease; }
         .progress-text { font-size: 13px; color: var(--text-secondary); font-variant-numeric: tabular-nums; }
-        footer { margin-top: 40px; color: var(--text-secondary); font-size: 12px; text-align: center; padding-bottom: 20px; }
+        footer { margin-top: 20px; color: var(--text-secondary); font-size: 12px; text-align: center; padding-bottom: 20px; }
     </style>
 </head>
 <body>
@@ -277,6 +301,13 @@ void WifiTransferManager::handleRoot() {
                 <div class="empty-state">加载中...</div>
             </div>
         </div>
+        
+        <div class="pagination" id="pagination-controls" style="display:none;">
+            <button class="page-btn" id="prev-btn" onclick="prevPage()">&larr; 上一页</button>
+            <span class="page-info" id="page-info">第 1 页</span>
+            <button class="page-btn" id="next-btn" onclick="nextPage()">下一页 &rarr;</button>
+        </div>
+
         <footer>Rowing Performance Monitor</footer>
     </div>
     <div id="overlay" class="overlay">
@@ -289,15 +320,27 @@ void WifiTransferManager::handleRoot() {
     <script>
         let downloading = false;
         let currentPath = '/';
+        let currentPage = 1;
+        const PAGE_LIMIT = 50; // Use a larger default limit
+        let hasMoreFiles = false;
         
         function formatSize(b){if(b===0)return'0 B';const k=1024,s=['B','KB','MB','GB'],i=Math.floor(Math.log(b)/Math.log(k));return parseFloat((b/Math.pow(k,i)).toFixed(1))+' '+s[i]}
         
-        function renderList(files){
+        function renderList(data){
+            const files = data.files;
             const c=document.getElementById('file-list-container');
             let h='';
             
-            // Add back button if not root
+            // Add back button if not root - ONLY on first page
+            // Or always show it? Usually it's always shown, or taken out of the list logic.
+            // Let's keep it in the list for now logic-wise, but maybe handle specially for pagination.
+            // If we are on page > 1, maybe "Back to Parent" is confusing if scrolling back up? 
+            // Standard "Explorer" behavior: Back is nav, pagination is view. 
+            // So Back returns to parent directory.
+            
             if(currentPath !== '/' && currentPath !== '') {
+                // Only show "Back" item on first page to save space? Or always?
+                // Let's show it always to be safe navigation-wise.
                 let parent = currentPath.substring(0, currentPath.lastIndexOf('/'));
                 if(parent === '') parent = '/';
                 h += `<div class="file-item" onclick="load('${parent}')"><div class="file-info"><div class="file-icon">\u21A9</div><div class="file-details"><div class="file-name">.. (\u8FD4\u56DE\u4E0A\u4E00\u7EA7)</div></div></div></div>`;
@@ -306,22 +349,58 @@ void WifiTransferManager::handleRoot() {
             if(!files||!files.length){
                 if(h === '') c.innerHTML='<div class="empty-state">暂无文件</div>';
                 else c.innerHTML=h;
-                return;
+            } else {
+                files.forEach(f=>{
+                    const icon=f.isDir?'\u{1F4C1}':'\u{1F4C4}';
+                    const meta=f.isDir?'文件夹':formatSize(f.size);
+                    const act=f.isDir?`load('${f.path}')`: `download('${f.path}','${f.name}')`;
+                    h+=`<div class="file-item" onclick="${act}"><div class="file-info"><div class="file-icon">${icon}</div><div class="file-details"><div class="file-name">${f.name}</div><div class="file-meta">${meta}</div></div></div><div class="action-icon">${f.isDir?'\u203A':'\u2193'}</div></div>`
+                });
+                c.innerHTML=h;
             }
             
-            files.forEach(f=>{
-                const icon=f.isDir?'\u{1F4C1}':'\u{1F4C4}';
-                const meta=f.isDir?'文件夹':formatSize(f.size);
-                const act=f.isDir?`load('${f.path}')`: `download('${f.path}','${f.name}')`;
-                h+=`<div class="file-item" onclick="${act}"><div class="file-info"><div class="file-icon">${icon}</div><div class="file-details"><div class="file-name">${f.name}</div><div class="file-meta">${meta}</div></div></div><div class="action-icon">${f.isDir?'\u203A':'\u2193'}</div></div>`
-            });
-            c.innerHTML=h;
+            // Update Pagination UI
+            currentPage = data.page || 1;
+            hasMoreFiles = data.hasMore || false;
+            
+            const pagControls = document.getElementById('pagination-controls');
+            if (currentPage === 1 && !hasMoreFiles) {
+                pagControls.style.display = 'none';
+            } else {
+                pagControls.style.display = 'flex';
+                document.getElementById('page-info').textContent = `第 ${currentPage} 页`;
+                document.getElementById('prev-btn').disabled = (currentPage <= 1);
+                document.getElementById('next-btn').disabled = !hasMoreFiles;
+            }
         }
         
-        function load(p){
-            currentPath = p;
-            fetch('/api/list?path='+encodeURIComponent(p)).then(r=>r.json()).then(d=>renderList(d.files)).catch(()=>document.getElementById('file-list-container').innerHTML='<div class="empty-state">加载失败</div>');
+        function load(p, page = 1){
+            // Reset to page 1 if changing directory
+            if (p !== currentPath) {
+                currentPath = p;
+                page = 1;
+            }
+            currentPage = page;
+            
+            document.getElementById('file-list-container').innerHTML='<div class="empty-state">加载中...</div>';
+            
+            fetch(`/api/list?path=${encodeURIComponent(p)}&page=${page}&limit=${PAGE_LIMIT}`)
+                .then(r=>r.json())
+                .then(d=>renderList(d))
+                .catch(e=>{
+                    console.error(e);
+                    document.getElementById('file-list-container').innerHTML='<div class="empty-state">加载失败</div>'
+                });
         }
+        
+        function prevPage() {
+            if (currentPage > 1) load(currentPath, currentPage - 1);
+        }
+        
+        function nextPage() {
+            if (hasMoreFiles) load(currentPath, currentPage + 1);
+        }
+
         function download(path,name){
             // Use native browser download to avoid memory buffering lag
             const a = document.createElement('a');
@@ -350,6 +429,8 @@ void WifiTransferManager::handleRoot() {
                 },300);
             }, 2000);
         }
+        
+        // Initial load
         load('/');
     </script>
 </body>
@@ -365,13 +446,29 @@ void WifiTransferManager::handleFileList() {
     path = server->arg("path");
   }
 
+  int page = 1;
+  if (server->hasArg("page")) {
+    page = server->arg("page").toInt();
+    if (page < 1)
+      page = 1;
+  }
+
+  int limit = 20;
+  if (server->hasArg("limit")) {
+    limit = server->arg("limit").toInt();
+    if (limit < 1)
+      limit = 20;
+    if (limit > 100)
+      limit = 100; // 限制最大每页数量
+  }
+
   // 验证路径安全性
   if (!isValidPath(path)) {
     server->send(400, "application/json", "{\"error\":\"Invalid path\"}");
     return;
   }
 
-  String jsonList = listDirectory(path);
+  String jsonList = listDirectory(path, page, limit);
   server->send(200, "application/json", jsonList);
 }
 
@@ -450,7 +547,8 @@ void WifiTransferManager::handleFileDownload() {
   Serial.printf("[WiFi传输] 传输完成: %d bytes\n", totalSent);
 }
 
-String WifiTransferManager::listDirectory(const String &path) {
+String WifiTransferManager::listDirectory(const String &path, int page,
+                                          int limit) {
   // Use JsonDocument instead of deprecated StaticJsonDocument
   JsonDocument doc;
   JsonArray filesArray = doc["files"].to<JsonArray>();
@@ -460,44 +558,59 @@ String WifiTransferManager::listDirectory(const String &path) {
     doc["error"] = "Cannot open directory";
     String output;
     serializeJson(doc, output);
-    root.close();
+    if (root)
+      root.close();
     return output;
   }
 
-  // 限制文件数量以防止内存溢出
-  const int MAX_FILES = 100;
-  int fileCount = 0;
+  int skip = (page - 1) * limit;
+  int count = 0;
+  int added = 0;
+  bool hasMore = false;
 
   File file = root.openNextFile();
-  while (file && fileCount < MAX_FILES) {
-    JsonObject fileObj = filesArray.add<JsonObject>();
-    String fileName = String(file.name());
+  while (file) {
+    // 跳过前面的文件
+    if (count < skip) {
+      count++;
+      file.close();
+      file = root.openNextFile();
+      continue;
+    }
 
-    // 获取完整路径
-    String fullPath = file.path();
+    // 添加当前页的文件
+    if (added < limit) {
+      JsonObject fileObj = filesArray.add<JsonObject>();
+      String fileName = String(file.name());
+      String fullPath = file.path();
 
-    fileObj["name"] = fileName;
-    fileObj["path"] = fullPath;
-    fileObj["isDir"] = file.isDirectory();
-    fileObj["size"] = file.isDirectory() ? 0 : file.size();
+      fileObj["name"] = fileName;
+      fileObj["path"] = fullPath;
+      fileObj["isDir"] = file.isDirectory();
+      fileObj["size"] = file.isDirectory() ? 0 : file.size();
+      added++;
+    } else {
+      // 还有更多文件
+      hasMore = true;
+      file.close(); // 关闭当前文件
+      break;        // 不需要继续遍历
+    }
 
     file.close();
     file = root.openNextFile();
-    fileCount++;
+    count++;
 
-    // 允许其他任务运行
-    yield();
+    // 允许其他任务运行 (防止看门狗触发)
+    if (count % 10 == 0) {
+      yield();
+    }
   }
 
-  if (file) {
-    file.close();
-  }
   root.close();
 
-  // 如果达到文件数量限制，添加警告
-  if (fileCount >= MAX_FILES) {
-    doc["warning"] = "Directory contains more files than can be displayed";
-  }
+  doc["page"] = page;
+  doc["limit"] = limit;
+  doc["hasMore"] = hasMore;
 
   String output;
   serializeJson(doc, output);

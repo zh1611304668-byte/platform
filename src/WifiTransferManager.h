@@ -41,7 +41,7 @@ private:
   void handleFileDownload();
 
   // 辅助函数
-  String listDirectory(const String &path);
+  String listDirectory(const String &path, int page = 1, int limit = 20);
   bool isValidPath(const String &path);
   String getContentType(const String &filename);
 };

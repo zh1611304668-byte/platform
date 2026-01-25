@@ -138,6 +138,36 @@ QueueHandle_t keyQueue = nullptr;
 TaskHandle_t keyTaskHandle = nullptr;
 TaskHandle_t mqttTaskHandle = nullptr;
 
+// ===================== 异步IMU日志相关 =====================
+struct ImuLogData {
+  unsigned long timestamp;
+  float ax;
+  float ay;
+  float az;
+};
+QueueHandle_t imuLogQueue = nullptr;
+TaskHandle_t sdLogTaskHandle = nullptr;
+
+void sdLogTask(void *pvParameters) {
+  ImuLogData data;
+  Serial.println("[SDLogTask] 任务已启动");
+
+  while (true) {
+    // 等待队列数据 (阻塞直到有数据)
+    if (xQueueReceive(imuLogQueue, &data, portMAX_DELAY) == pdTRUE) {
+      // 只有当训练处于活动状态且SD卡正常时才写入
+      // logImuData 内部会检查 imuFile 是否有效
+      sdCardManager.logImuData(data.timestamp, data.ax, data.ay, data.az);
+
+      // Heartbeat logs (optional, commented out to avoid spam)
+      // static uint32_t count = 0;
+      // if (count++ % 100 == 0) Serial.println("[SDLogTask] Processed 100 IMU
+      // logs");
+    }
+  }
+}
+// ========================================================
+
 static lv_obj_t *dot;
 
 volatile ScreenId current_screen = SCREEN1;
@@ -443,6 +473,19 @@ void setup() {
     esp_restart();
   }
 
+  // 初始化IMU日志队列
+  imuLogQueue = xQueueCreate(128, sizeof(ImuLogData));
+  if (!imuLogQueue) {
+    Serial.println("FATAL: IMU log queue creation failed!");
+  }
+
+  // 创建SD日志任务 - 固定到Core 0，优先级降低到0以避免干扰主循环
+  BaseType_t sdTaskResult = xTaskCreatePinnedToCore(
+      sdLogTask, "SDLogTask", 4096, NULL, 0, &sdLogTaskHandle, 0);
+  if (sdTaskResult != pdPASS) {
+    Serial.println("FATAL: SD log task creation failed!");
+  }
+
   optimizeTaskPriorities();
 
   // WiFi将在网络任务完成后自动启动
@@ -487,11 +530,22 @@ void loop() {
   if (now - lastLogTime > 16) { // 16ms interval = 62.5Hz，与IMU采样率一致
     lastLogTime = now;
 
-    if (training.isActive() && rtcInitialized && rtcTimeSynced) {
+    // 即使RTC未同步，也记录IMU数据（使用millis）
+    if (training.isActive()) {
       float ax, ay, az;
       imu.getAcceleration(ax, ay, az);
-      unsigned long timestamp = millis();
-      sdCardManager.logImuData(timestamp, ax, ay, az);
+
+      ImuLogData logData;
+      logData.timestamp = millis();
+      logData.ax = ax;
+      logData.ay = ay;
+      logData.az = az;
+
+      // 发送到队列 (非阻塞)
+      // 如果队列满，为了保护主循环流畅性，选择丢弃数据而不是阻塞
+      if (imuLogQueue != nullptr) {
+        xQueueSend(imuLogQueue, &logData, 0);
+      }
     }
 
     if (sdCardManager.isDisabled() && (now - lastSdStatusPrint > 30000)) {
@@ -1012,13 +1066,17 @@ void loop() {
   if (imu.hasNewStroke()) {
     const StrokeMetrics &metrics = imu.getLastStrokeMetrics();
 
-    // 更新全局变量（保持兼容性）
+    // 更新桨数和桨频
     strokeRate = imu.getStrokeRate();
-    strokeLength = metrics.strokeDistance;
-    totalDistance = metrics.totalDistance;
-    strokeCount = metrics.strokeNumber; // 更新全局变量
+    strokeCount = metrics.strokeNumber;
     int currentStrokeCount = strokeCount;
     float currentSpeedMps = gnss.getSpeed();
+
+    // 触发训练逻辑和数据捕获（会计算距离并更新全局变量）
+    training.onStrokeDetected();
+    strokeDataMgr.captureStroke(currentStrokeCount);
+
+    // 现在strokeLength和totalDistance已被StrokeDataManager更新，可以用于UI显示
 
     // 更新 ConfigManager
     configManager.safeUpdateSensorData(strokeRate, currentSpeedMps,
@@ -1041,9 +1099,8 @@ void loop() {
     lv_label_set_text(ui_Label23, tmp);
     lv_label_set_text(ui_Label60, tmp);
 
-    // 触发训练逻辑和数据捕获
-    training.onStrokeDetected();
-    strokeDataMgr.captureStroke(currentStrokeCount);
+    // 立即刷新UI显示，减少延迟（事件驱动刷新）
+    lv_timer_handler();
 
     // 清除标志
     imu.clearNewStrokeFlag();
@@ -1066,7 +1123,7 @@ void loop() {
                                     tempStrokeCount, tempTotalDistance);
     configManager.safeGetTimeData(displayLocalTime);
 
-    // 速度/功率/配速每秒刷新一次（1Hz）
+    // 速度/功率/配速每秒刷新一次
     static uint32_t lastSpeedPowerPaceUpdate = 0;
     if (now - lastSpeedPowerPaceUpdate > 1000) {
       snprintf(tmp, sizeof(tmp), "%.1f", displaySpeedMps);

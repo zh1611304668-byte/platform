@@ -216,12 +216,17 @@ bool StrokeDataManager::captureStroke(int currentStrokeCount) {
   s_totalOutputDistance += snapshot.strokeLength;
   snapshot.totalDistance = s_totalOutputDistance;
 
+  // 更新全局变量供UI显示（确保UI和MQTT数据一致）
+  strokeLength = snapshot.strokeLength;
+  totalDistance = snapshot.totalDistance;
+
   snapshot.isValid = true;
   snapshot.isSent = false;
   snapshot.retryCount = 0;
 
-  // 将桨数即时写入SD卡
-  sdCardManager.logStrokeSnapshot(snapshot);
+  // 将桨数即时写入SD卡（DISABLED: 会严重阻塞主循环，导致划桨检测失败）
+  // TODO: 改为异步写入或在MQTT任务中批量写入
+  // sdCardManager.logStrokeSnapshot(snapshot);
 
   // 更新最后捕获的桨数
   lastCapturedStroke = metrics.strokeNumber;

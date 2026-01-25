@@ -162,9 +162,13 @@ void SDCardManager::startNewTrainingFile(const String &trainId,
 
   imuFile = SD_MMC.open(currentLogFile.c_str(), FILE_WRITE);
   if (!imuFile) {
+    Serial.printf("[SD] ❌ Failed to open IMU log file: %s\n",
+                  currentLogFile.c_str());
     currentLogFile = "";
     return;
   }
+  Serial.printf("[SD] ✅ Opened IMU log file: %s\n", currentLogFile.c_str());
+
   if (imuFile.size() == 0 || imuFile.position() == 0) {
     imuFile.println("timestamp,acc_x,acc_y,acc_z");
     imuFile.flush();
