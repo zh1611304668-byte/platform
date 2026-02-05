@@ -19,9 +19,24 @@ void SimulationWorker::load_data(const CsvData &data) {
   current_idx_ = 0;
   if (!data_.timestamps_ms.empty()) {
     base_time_ms_ = data_.timestamps_ms.front();
+    // 每次加载新 IMU 数据时重置 GNSS 归一化状态
+    nmea_normalized_ = false;
+    gnss_offset_valid_ = false;
+    // 建立 UTC -> sys 偏移（首条有效 UTC）
+    for (const auto &entry : nmea_data_) {
+      if (entry.raw_nmea_ms >= 0) {
+        gnss_utc_offset_ms_ = entry.raw_sys_ms - entry.raw_nmea_ms;
+        gnss_offset_valid_ = true;
+        break;
+      }
+    }
     if (!nmea_data_.empty() && !nmea_normalized_) {
       for (auto &entry : nmea_data_) {
-        entry.timestamp_ms -= static_cast<qint64>(base_time_ms_);
+        qint64 aligned = entry.raw_sys_ms;
+        if (gnss_offset_valid_ && entry.raw_nmea_ms >= 0) {
+          aligned = entry.raw_nmea_ms + gnss_utc_offset_ms_;
+        }
+        entry.timestamp_ms = aligned - static_cast<qint64>(base_time_ms_);
       }
       nmea_normalized_ = true;
     }
@@ -48,6 +63,9 @@ void SimulationWorker::load_gnss_data(const QString &csv_path) {
 
   nmea_data_.clear();
   current_nmea_idx_ = 0;
+  gnss_offset_valid_ = false;
+  gnss_utc_offset_ms_ = 0.0;
+  nmea_normalized_ = false;
 
   // Read line by line
   while (!file.atEnd()) {
@@ -57,40 +75,70 @@ void SimulationWorker::load_gnss_data(const QString &csv_path) {
       continue;
 
     // Split by comma
-    // Format: timestamp,nmea
-    // Example: 34201,$GNGGA,,,,,,0,,,,,,,,*78
-
-    // Find first comma
-    int commaIdx = line.indexOf(',');
-    if (commaIdx == -1)
+    // Format: sys_ms,nmea_ms,nmea   (legacy: timestamp,nmea)
+    // Example: 34201,3271350,$GNGGA,,,,,,0,,,,,,,,*78
+    // 取第一列为 sys_ms，第二列为 nmea_ms（可为-1/空），第三列开始为原始 NMEA（带逗号）
+    int firstComma = line.indexOf(',');
+    if (firstComma <= 0)
       continue;
-
-    QString tsPart = line.left(commaIdx);
-    QString nmeaPart = line.mid(commaIdx + 1);
+    int secondComma = line.indexOf(',', firstComma + 1);
+    if (secondComma <= 0 || secondComma >= line.size() - 1)
+      continue;
+    QString tsPart = line.left(firstComma);
+    QString nmeaMsPart = line.mid(firstComma + 1, secondComma - firstComma - 1);
+    QString nmeaPart = line.mid(secondComma + 1);
 
     bool ok;
     qint64 ts = tsPart.toLongLong(&ok);
     if (!ok)
-      continue; // First line might be header "timestamp,nmea"
+      continue; // First line might be header
 
     // Only process lines that start with $
     if (!nmeaPart.startsWith('$'))
       continue;
 
-    qint64 adjusted_ts = ts;
-    if (base_time_ms_ > 0.0) {
-      adjusted_ts -= static_cast<qint64>(base_time_ms_);
-    }
-    nmea_data_.push_back({adjusted_ts, nmeaPart});
+    qint64 raw_nmea_ms = -1;
+    bool okUtc = false;
+    raw_nmea_ms = nmeaMsPart.toLongLong(&okUtc);
+    if (!okUtc)
+      raw_nmea_ms = -1;
+
+    NmeaEntry entry;
+    entry.timestamp_ms = ts; // 临时，占位，稍后归一化
+    entry.raw_sys_ms = ts;
+    entry.raw_nmea_ms = raw_nmea_ms;
+    entry.raw_nmea = nmeaPart;
+    nmea_data_.push_back(entry);
   }
 
-  // Sort by timestamp just in case
+  // Sort by sys_ms just in case
   std::sort(nmea_data_.begin(), nmea_data_.end(),
             [](const NmeaEntry &a, const NmeaEntry &b) {
-              return a.timestamp_ms < b.timestamp_ms;
+              return a.raw_sys_ms < b.raw_sys_ms;
             });
 
-  nmea_normalized_ = (base_time_ms_ > 0.0);
+  nmea_normalized_ = false; // 需要等 IMU 基准后归一化
+
+  // 如果 IMU 基准已在 load_data 中设定，立即归一化，避免 run() 时因 base_time_ms_>0 而跳过
+  if (base_time_ms_ > 0.0 && !nmea_data_.empty()) {
+    if (!gnss_offset_valid_) {
+      for (const auto &entry : nmea_data_) {
+        if (entry.raw_nmea_ms >= 0) {
+          gnss_utc_offset_ms_ = entry.raw_sys_ms - entry.raw_nmea_ms;
+          gnss_offset_valid_ = true;
+          break;
+        }
+      }
+    }
+    for (auto &entry : nmea_data_) {
+      qint64 aligned = entry.raw_sys_ms;
+      if (gnss_offset_valid_ && entry.raw_nmea_ms >= 0) {
+        aligned = entry.raw_nmea_ms + gnss_utc_offset_ms_;
+      }
+      entry.timestamp_ms = aligned - static_cast<qint64>(base_time_ms_);
+    }
+    nmea_normalized_ = true;
+  }
 }
 
 // Haversine formula to calculate distance between two points in meters
@@ -125,7 +173,8 @@ void SimulationWorker::run() {
     base_time_ms_ = data_.timestamps_ms.front();
     if (!nmea_data_.empty() && !nmea_normalized_) {
       for (auto &entry : nmea_data_) {
-        entry.timestamp_ms -= static_cast<qint64>(base_time_ms_);
+        entry.timestamp_ms =
+            entry.raw_sys_ms - static_cast<qint64>(base_time_ms_);
       }
       nmea_normalized_ = true;
     }
@@ -212,7 +261,10 @@ void SimulationWorker::run() {
                          gnss_processor_.getLatitude(),
                          gnss_processor_.getLongitude(),
                          gnss_processor_.getVisibleSatellites(),
-                         gnss_processor_.getPaceString());
+                         gnss_processor_.getPaceString(),
+                         gnss_processor_.getHDOP(),
+                         gnss_processor_.getFixStatus(),
+                         gnss_processor_.getDiffAge());
       }
     }
     emit frameUpdated();
@@ -298,7 +350,8 @@ void SimulationWorker::run() {
           gnss_processor_.getSpeed(), gnss_processor_.getLatitude(),
           gnss_processor_.getLongitude(),
           gnss_processor_.getVisibleSatellites(), // or solvingSatellites
-          gnss_processor_.getPaceString());
+          gnss_processor_.getPaceString(), gnss_processor_.getHDOP(),
+          gnss_processor_.getFixStatus(), gnss_processor_.getDiffAge());
 
       last_ui_update = elapsed;
     }

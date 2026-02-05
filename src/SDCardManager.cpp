@@ -20,7 +20,8 @@ SDCardManager::SDCardManager()
       trainingCounter(0), currentLogFile(""), trainingJsonPath(""),
       strokeCsvPath(""), nmeaCsvPath(""), debugPath(""),
       currentSessionFolder(""), currentTrainId(""), lastErrorTime(0),
-      lastFlushTime(0) {
+      lastFlushTime(0), lastNmeaMs_(-1), imuQueue(nullptr),
+      imuTaskHandle(nullptr), imuLoggingEnabled(false) {
   resetStats();
 }
 
@@ -50,6 +51,24 @@ bool SDCardManager::begin() {
   disabled = false;
   consecutiveErrors = 0;
   resetStats();
+
+  // 异步IMU写入支持
+  if (!imuQueue) {
+    imuQueue = xQueueCreate(IMU_QUEUE_LEN, sizeof(ImuSample));
+    if (!imuQueue) {
+      Serial.println("[SD] ⚠️ 创建IMU队列失败，保持同步写入模式");
+    }
+  }
+  if (imuQueue && !imuTaskHandle) {
+    BaseType_t res = xTaskCreatePinnedToCore(imuLogTask, "IMU_SD_Writer",
+                                             4096, this, 0, &imuTaskHandle, 1);
+    if (res != pdPASS) {
+      Serial.println("[SD] ⚠️ 创建IMU写入任务失败，保持同步写入模式");
+      imuTaskHandle = nullptr;
+    }
+  }
+  imuLoggingEnabled = (imuQueue && imuTaskHandle);
+
   return true;
 }
 
@@ -66,66 +85,19 @@ void SDCardManager::ensureSessionFolder() {
 
 void SDCardManager::logImuData(unsigned long timestamp, float ax, float ay,
                                float az) {
-  if (!cardMounted) {
-    return;
-  }
-  if (disabled) {
-    unsigned long now = millis();
-    if (now - lastErrorTime > ERROR_RECOVERY_INTERVAL) {
-      disabled = false;
-      consecutiveErrors = 0;
-    } else {
-      return;
-    }
-  }
-
-  if (!imuFile) {
+  if (!cardMounted || disabled || !imuFile) {
     return;
   }
 
-  // 内部缓冲区 - 使用static在调用间保持数据
-  static char buffer[2048]; // 约15-20条样本数据
-  static int bufferLen = 0;
-  static int sampleCount = 0;
-
-  // 格式化数据到缓冲区
-  int written = snprintf(buffer + bufferLen, sizeof(buffer) - bufferLen,
-                         "%lu,%.4f,%.4f,%.4f\n", timestamp, ax, ay, az);
-
-  // 缓冲区溢出保护
-  if (written < 0 || written >= (int)(sizeof(buffer) - bufferLen)) {
-    // 立即刷新现有数据
-    if (bufferLen > 0) {
-      imuFile.print(buffer);
-      imuFile.flush();
-    }
-    bufferLen = 0;
-    sampleCount = 0;
+  // 异步路径：快速入队，队列满时直接丢弃，绝不阻塞主循环
+  if (imuLoggingEnabled && imuQueue) {
+    ImuSample sample{(uint32_t)timestamp, ax, ay, az};
+    xQueueSend(imuQueue, &sample, 0); // ignore failure on full
     return;
   }
 
-  bufferLen += written;
-  sampleCount++;
-
-  // 刷新条件：缓冲区接近满(>1800字节) 或 累积20条样本
-  if (bufferLen > 1800 || sampleCount >= 20) {
-    size_t flushed = imuFile.print(buffer);
-    if (flushed > 0) {
-      imuFile.flush();
-      consecutiveErrors = 0;
-      lastFlushTime = millis();
-    } else {
-      consecutiveErrors++;
-      lastErrorTime = millis();
-
-      if (consecutiveErrors >= MAX_CONSECUTIVE_ERRORS) {
-        disabled = true;
-        imuFile.close();
-      }
-    }
-    bufferLen = 0;
-    sampleCount = 0;
-  }
+  // 回退同步写入（不会尝试flush，尽量减少阻塞）
+  imuFile.printf("%lu,%.4f,%.4f,%.4f\n", timestamp, ax, ay, az);
 }
 
 void SDCardManager::startNewTrainingFile() {
@@ -195,7 +167,7 @@ void SDCardManager::startNewTrainingFile(const String &trainId,
   Serial.printf("[SD] ✅ Opened IMU log file: %s\n", currentLogFile.c_str());
 
   if (imuFile.size() == 0 || imuFile.position() == 0) {
-    imuFile.println("timestamp,acc_x,acc_y,acc_z");
+    imuFile.println("sys_ms,acc_x,acc_y,acc_z");
     imuFile.flush();
   }
 
@@ -221,7 +193,7 @@ void SDCardManager::startNewTrainingFile(const String &trainId,
     Serial.printf("[SD] ✅ Opened GNSS file: %s\n", nmeaCsvPath.c_str());
     // 使用position()而不是size()，更可靠地检测新文件
     if (nmeaCsvFile.position() == 0) {
-      nmeaCsvFile.println("timestamp,nmea");
+      nmeaCsvFile.println("sys_ms,nmea_ms,nmea");
       nmeaCsvFile.flush();
       Serial.println("[SD] ✅ GNSS CSV header written");
     } else {
@@ -236,6 +208,10 @@ void SDCardManager::startNewTrainingFile(const String &trainId,
   currentTrainId = safeTrainId;
   lastFlushTime = millis();
   consecutiveErrors = 0;
+  lastNmeaMs_ = -1; // 重置UTC缓存
+
+  // 重新启用IMU异步写入
+  imuLoggingEnabled = (imuQueue && imuTaskHandle);
 }
 
 void SDCardManager::logTrainingSample(const TrainingSample &sample,
@@ -376,12 +352,37 @@ void SDCardManager::logNmeaRaw(const String &nmea) {
     return;
   }
 
-  // 使用millis()作为时间戳，与IMU数据格式一致，便于对齐
-  unsigned long timestamp = millis();
+  // 使用millis()作为系统时间戳；同时解析NMEA自带UTC（如果有），转为毫秒
+  unsigned long sys_ms = millis();
+  long nmea_ms = -1;
+  // 仅对含 UTC 的句子(GGA/RMC/GLL)解析时间；VTG 不解析且不刷新 lastNmeaMs_
+  bool hasTimeField = false;
+  if (nmea.startsWith("$GNGGA") || nmea.startsWith("$GPGGA") ||
+      nmea.startsWith("$GNRMC") || nmea.startsWith("$GPRMC") ||
+      nmea.startsWith("$GNGLL") || nmea.startsWith("$GPGLL")) {
+    int firstComma = nmea.indexOf(',');
+    if (firstComma > 0 && nmea.length() >= firstComma + 7) {
+      String timeField = nmea.substring(firstComma + 1, firstComma + 11); // hhmmss.ss
+      if (timeField.length() >= 6 && isDigit(timeField[0])) {
+        int hh = timeField.substring(0, 2).toInt();
+        int mm = timeField.substring(2, 4).toInt();
+        float sec = timeField.substring(4).toFloat();
+        nmea_ms = (long)((hh * 3600 + mm * 60) * 1000 + sec * 1000);
+        lastNmeaMs_ = nmea_ms;
+        hasTimeField = true;
+      }
+    }
+  }
+  // 若本行无时间，尝试复用上一 UTC（不递增，避免虚假100Hz）
+  if (!hasTimeField && lastNmeaMs_ >= 0) {
+    nmea_ms = lastNmeaMs_;
+  }
 
   String csvLine;
-  csvLine.reserve(nmea.length() + 20);
-  csvLine += timestamp;
+  csvLine.reserve(nmea.length() + 40);
+  csvLine += sys_ms;
+  csvLine += ",";
+  csvLine += nmea_ms;
   csvLine += ",";
   csvLine += nmea;
 
@@ -471,6 +472,8 @@ void SDCardManager::closeCurrentFiles() {
   currentSessionFolder = "";
   currentTrainId = "";
   stats.active = false;
+
+  imuLoggingEnabled = false;
 }
 
 void SDCardManager::closeCurrentFile() { closeCurrentFiles(); }
@@ -527,4 +530,54 @@ void SDCardManager::logDebug(const String &msg) {
   // 调试日志已禁用
   (void)msg;
   return;
+}
+
+// ===================== IMU 异步写入任务 =====================
+void SDCardManager::imuLogTask(void *param) {
+  SDCardManager *self = static_cast<SDCardManager *>(param);
+  char buffer[2048];
+  int bufLen = 0;
+  int batchCount = 0;
+  TickType_t lastFlush = xTaskGetTickCount();
+
+  while (true) {
+    ImuSample sample;
+    bool got = xQueueReceive(self->imuQueue, &sample, pdMS_TO_TICKS(100)) == pdTRUE;
+
+    // 如果被禁用或文件不可用，直接跳过
+    if (self->disabled || !self->imuFile) {
+      // nothing
+    } else if (got) {
+      int written = snprintf(buffer + bufLen, sizeof(buffer) - bufLen,
+                             "%lu,%.4f,%.4f,%.4f\n",
+                             (unsigned long)sample.ts_ms, sample.ax, sample.ay,
+                             sample.az);
+      if (written > 0 && written < (int)(sizeof(buffer) - bufLen)) {
+        bufLen += written;
+        batchCount++;
+      }
+    }
+
+    bool timeFlush = (xTaskGetTickCount() - lastFlush) >= pdMS_TO_TICKS(FLUSH_INTERVAL_MS);
+    bool needFlush = (bufLen > 1800) || (batchCount >= IMU_BATCH_SIZE) || (timeFlush && bufLen > 0);
+
+    if (needFlush && self->imuFile && !self->disabled && bufLen > 0) {
+      size_t flushed = self->imuFile.write((uint8_t *)buffer, bufLen);
+      if (flushed == (size_t)bufLen) {
+        self->imuFile.flush();
+        self->consecutiveErrors = 0;
+      } else {
+        self->consecutiveErrors++;
+        self->lastErrorTime = millis();
+        if (self->consecutiveErrors >= MAX_CONSECUTIVE_ERRORS) {
+          self->disabled = true;
+          self->imuFile.close();
+          Serial.println("[SD] IMU logging disabled due to errors");
+        }
+      }
+      bufLen = 0;
+      batchCount = 0;
+      lastFlush = xTaskGetTickCount();
+    }
+  }
 }

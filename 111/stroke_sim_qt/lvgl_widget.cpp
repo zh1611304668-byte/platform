@@ -391,6 +391,11 @@ void LvglWidget::updateTimer(const QString &time_str) {
   updateBoundData();
 }
 
+void LvglWidget::updateClock(const QString &time_str) {
+  // Top-right clock (Label10) on Screen1
+  lv_label_set_text(ui_Label10, time_str.toUtf8().constData());
+}
+
 void LvglWidget::updateSpeed(float speed_mps) {
   char buf[16];
   snprintf(buf, sizeof(buf), "%.1f", speed_mps);

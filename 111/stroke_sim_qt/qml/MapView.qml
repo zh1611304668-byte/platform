@@ -9,6 +9,10 @@ Item {
   property real defaultLat: 31.9778222
   property real defaultLon: 120.9097313
 
+  ListModel {
+    id: strokeModel
+  }
+
   function addPoint(lat, lon) {
     if (!isFinite(lat) || !isFinite(lon)) return;
     var coord = QtPositioning.coordinate(lat, lon);
@@ -16,11 +20,21 @@ Item {
     track.path = pathPoints;
     marker.coordinate = coord;
     marker.visible = true;
+    // 若未设置中心，首次定位
     if (!hasCenter) {
       map.center = coord;
       map.zoomLevel = 16;
       hasCenter = true;
     }
+  }
+
+  function addStrokeMarker(lat, lon) {
+    if (!isFinite(lat) || !isFinite(lon)) return;
+    // 取消上一桨高亮
+    if (strokeModel.count > 0) {
+      strokeModel.setProperty(strokeModel.count - 1, "current", false);
+    }
+    strokeModel.append({lat: lat, lon: lon, current: true});
   }
 
   function resetTrack() {
@@ -30,6 +44,7 @@ Item {
     hasCenter = false;
     map.center = QtPositioning.coordinate(defaultLat, defaultLon);
     map.zoomLevel = 16;
+    strokeModel.clear();
   }
 
   Map {
@@ -38,12 +53,31 @@ Item {
     plugin: Plugin { name: "osm" }
     center: QtPositioning.coordinate(defaultLat, defaultLon)
     zoomLevel: 16
+    minimumZoomLevel: 2
+    maximumZoomLevel: 22
 
     MapPolyline {
       id: track
       line.width: 3
       line.color: "#1E88E5"
       path: []
+    }
+
+    MapItemView {
+      model: strokeModel
+      delegate: MapQuickItem {
+        coordinate: QtPositioning.coordinate(lat, lon)
+        anchorPoint.x: width/2
+        anchorPoint.y: height/2
+        sourceItem: Rectangle {
+          width: current ? 12 : 8
+          height: width
+          radius: width/2
+          color: current ? "#E53935" : "#FDD835"
+          border.color: "white"
+          border.width: 1
+        }
+      }
     }
 
     MapQuickItem {

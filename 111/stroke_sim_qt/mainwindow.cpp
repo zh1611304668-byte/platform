@@ -641,6 +641,11 @@ void MainWindow::resetSimulation() {
       QMetaObject::invokeMethod(root, "resetTrack");
     }
   }
+  if (map_view_) {
+    if (QObject *root = map_view_->rootObject()) {
+      QMetaObject::invokeMethod(root, "resetTrack");
+    }
+  }
 
   detector_.reset();
   syncParamsToDetector();
@@ -657,6 +662,13 @@ void MainWindow::resetSimulation() {
   training_start_sim_ms_ = 0;
   training_start_wall_time_ = QDateTime();
   training_strokes_.clear();
+  last_gnss_lat_ = 0.0;
+  last_gnss_lon_ = 0.0;
+  gnss_has_fix_ = false;
+  // 重置仿真线程时间轴
+  if (worker_) {
+    worker_->load_gnss_data(QString()); // 清空GNSS缓存
+  }
   if (export_btn_) {
     export_btn_->setEnabled(false);
   }
@@ -1069,6 +1081,10 @@ void MainWindow::updateUi() {
                                  .arg(secs, 2, 10, QChar('0'));
     lvgl_widget_->updateTimer(time_str);
 
+    // 同时更新屏幕右上角 Label10 为北京时间
+    const auto now = QDateTime::currentDateTimeUtc().toOffsetFromUtc(8 * 3600);
+    lvgl_widget_->updateClock(now.time().toString("HH:mm"));
+
     const float display_speed = static_cast<float>(last_gnss_speed_mps_);
     const QString display_pace = last_gnss_pace_str_;
     lvgl_widget_->updateSpeed(display_speed);
@@ -1167,13 +1183,29 @@ void MainWindow::onTrainingStopped() {
 }
 
 void MainWindow::onGnssUpdated(double speed_mps, double lat, double lon,
-                               int sats, QString pace) {
-  Q_UNUSED(sats);
+                               int sats, QString pace, const QString &hdop,
+                               const QString &fix, const QString &diff_age) {
   last_gnss_speed_mps_ = speed_mps;
   last_gnss_lat_ = lat;
   last_gnss_lon_ = lon;
   last_gnss_pace_str_ = pace;
   gnss_has_fix_ = (lat != 0.0 && lon != 0.0);
+
+  // 更新GNSS状态标签（若存在）
+  if (lvgl_widget_) {
+    // 这些Label命名与固件一致：ui_Label15(卫星数), ui_Label58(解状态), ui_Label65(差分龄期), ui_Label43(HDOP)
+    char buf[16];
+    snprintf(buf, sizeof(buf), "%02d", sats);
+    lv_label_set_text(ui_Label15, buf);
+    lv_label_set_text(ui_Label58, fix.toUtf8().constData());
+    lv_label_set_text(ui_Label65, diff_age.toUtf8().constData());
+    lv_label_set_text(ui_Label43, hdop.toUtf8().constData());
+  }
+
+  // 实时轨迹：每次 GNSS 更新都推进折线
+  if (gnss_has_fix_) {
+    addMapPoint(lat, lon);
+  }
 }
 
 void MainWindow::onLoadGnss() {
@@ -1238,6 +1270,14 @@ void MainWindow::onStrokeDetected(const StrokeEvent &event) {
     prev_output_lon_ = curr_lon;
     has_prev_output_ = true;
     addMapPoint(curr_lat, curr_lon);
+    // 标记桨点：旧桨变黄，当前桨红
+    if (map_view_) {
+      if (QObject *root = map_view_->rootObject()) {
+        QMetaObject::invokeMethod(root, "addStrokeMarker",
+                                  Q_ARG(QVariant, curr_lat),
+                                  Q_ARG(QVariant, curr_lon));
+      }
+    }
   }
 
   total_distance_m_ += stroke_length_m;

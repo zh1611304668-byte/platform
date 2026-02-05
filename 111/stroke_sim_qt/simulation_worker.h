@@ -28,7 +28,8 @@ signals:
   void frameUpdated();
   void simTimeUpdated(qint64 sim_time_ms);
   void gnssUpdated(double speed_mps, double lat, double lon, int sats,
-                   QString pace);
+                   QString pace, const QString &hdop, const QString &fix,
+                   const QString &diff_age);
   void strokeDetected(const StrokeEvent &event);
   void finished();
 
@@ -45,13 +46,17 @@ private:
   size_t current_idx_ = 0;
 
   double sim_start_time_ = 0.0;
-  double base_time_ms_ = 0.0;
+  double base_time_ms_ = 0.0;          // IMU基准
+  double gnss_utc_offset_ms_ = 0.0;    // sys_ms - nmea_ms
+  bool gnss_offset_valid_ = false;
   bool nmea_normalized_ = false;
 
   // GNSS Integration
   GNSSProcessor gnss_processor_;
   struct NmeaEntry {
-    qint64 timestamp_ms;
+    qint64 timestamp_ms;   // relative to base_time_ms_
+    qint64 raw_sys_ms;     // original sys_ms from CSV
+    qint64 raw_nmea_ms;    // UTC-derived ms (-1 if none)
     QString raw_nmea;
   };
   std::vector<NmeaEntry> nmea_data_;

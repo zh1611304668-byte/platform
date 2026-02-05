@@ -49,6 +49,9 @@ template <> constexpr inline auto SimulationWorker::qt_create_metaobjectdata<qt_
         "lon",
         "sats",
         "pace",
+        "hdop",
+        "fix",
+        "diff_age",
         "strokeDetected",
         "StrokeEvent",
         "event",
@@ -64,18 +67,18 @@ template <> constexpr inline auto SimulationWorker::qt_create_metaobjectdata<qt_
             { QMetaType::LongLong, 4 },
         }}),
         // Signal 'gnssUpdated'
-        QtMocHelpers::SignalData<void(double, double, double, int, QString)>(5, 2, QMC::AccessPublic, QMetaType::Void, {{
+        QtMocHelpers::SignalData<void(double, double, double, int, QString, const QString &, const QString &, const QString &)>(5, 2, QMC::AccessPublic, QMetaType::Void, {{
             { QMetaType::Double, 6 }, { QMetaType::Double, 7 }, { QMetaType::Double, 8 }, { QMetaType::Int, 9 },
-            { QMetaType::QString, 10 },
+            { QMetaType::QString, 10 }, { QMetaType::QString, 11 }, { QMetaType::QString, 12 }, { QMetaType::QString, 13 },
         }}),
         // Signal 'strokeDetected'
-        QtMocHelpers::SignalData<void(const StrokeEvent &)>(11, 2, QMC::AccessPublic, QMetaType::Void, {{
-            { 0x80000000 | 12, 13 },
+        QtMocHelpers::SignalData<void(const StrokeEvent &)>(14, 2, QMC::AccessPublic, QMetaType::Void, {{
+            { 0x80000000 | 15, 16 },
         }}),
         // Signal 'finished'
-        QtMocHelpers::SignalData<void()>(14, 2, QMC::AccessPublic, QMetaType::Void),
+        QtMocHelpers::SignalData<void()>(17, 2, QMC::AccessPublic, QMetaType::Void),
         // Slot 'run'
-        QtMocHelpers::SlotData<void()>(15, 2, QMC::AccessPublic, QMetaType::Void),
+        QtMocHelpers::SlotData<void()>(18, 2, QMC::AccessPublic, QMetaType::Void),
     };
     QtMocHelpers::UintData qt_properties {
     };
@@ -101,7 +104,7 @@ void SimulationWorker::qt_static_metacall(QObject *_o, QMetaObject::Call _c, int
         switch (_id) {
         case 0: _t->frameUpdated(); break;
         case 1: _t->simTimeUpdated((*reinterpret_cast<std::add_pointer_t<qint64>>(_a[1]))); break;
-        case 2: _t->gnssUpdated((*reinterpret_cast<std::add_pointer_t<double>>(_a[1])),(*reinterpret_cast<std::add_pointer_t<double>>(_a[2])),(*reinterpret_cast<std::add_pointer_t<double>>(_a[3])),(*reinterpret_cast<std::add_pointer_t<int>>(_a[4])),(*reinterpret_cast<std::add_pointer_t<QString>>(_a[5]))); break;
+        case 2: _t->gnssUpdated((*reinterpret_cast<std::add_pointer_t<double>>(_a[1])),(*reinterpret_cast<std::add_pointer_t<double>>(_a[2])),(*reinterpret_cast<std::add_pointer_t<double>>(_a[3])),(*reinterpret_cast<std::add_pointer_t<int>>(_a[4])),(*reinterpret_cast<std::add_pointer_t<QString>>(_a[5])),(*reinterpret_cast<std::add_pointer_t<QString>>(_a[6])),(*reinterpret_cast<std::add_pointer_t<QString>>(_a[7])),(*reinterpret_cast<std::add_pointer_t<QString>>(_a[8]))); break;
         case 3: _t->strokeDetected((*reinterpret_cast<std::add_pointer_t<StrokeEvent>>(_a[1]))); break;
         case 4: _t->finished(); break;
         case 5: _t->run(); break;
@@ -113,7 +116,7 @@ void SimulationWorker::qt_static_metacall(QObject *_o, QMetaObject::Call _c, int
             return;
         if (QtMocHelpers::indexOfMethod<void (SimulationWorker::*)(qint64 )>(_a, &SimulationWorker::simTimeUpdated, 1))
             return;
-        if (QtMocHelpers::indexOfMethod<void (SimulationWorker::*)(double , double , double , int , QString )>(_a, &SimulationWorker::gnssUpdated, 2))
+        if (QtMocHelpers::indexOfMethod<void (SimulationWorker::*)(double , double , double , int , QString , const QString & , const QString & , const QString & )>(_a, &SimulationWorker::gnssUpdated, 2))
             return;
         if (QtMocHelpers::indexOfMethod<void (SimulationWorker::*)(const StrokeEvent & )>(_a, &SimulationWorker::strokeDetected, 3))
             return;
@@ -166,9 +169,9 @@ void SimulationWorker::simTimeUpdated(qint64 _t1)
 }
 
 // SIGNAL 2
-void SimulationWorker::gnssUpdated(double _t1, double _t2, double _t3, int _t4, QString _t5)
+void SimulationWorker::gnssUpdated(double _t1, double _t2, double _t3, int _t4, QString _t5, const QString & _t6, const QString & _t7, const QString & _t8)
 {
-    QMetaObject::activate<void>(this, &staticMetaObject, 2, nullptr, _t1, _t2, _t3, _t4, _t5);
+    QMetaObject::activate<void>(this, &staticMetaObject, 2, nullptr, _t1, _t2, _t3, _t4, _t5, _t6, _t7, _t8);
 }
 
 // SIGNAL 3

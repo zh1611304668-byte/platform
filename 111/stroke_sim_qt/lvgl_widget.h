@@ -37,6 +37,7 @@ public:
   void updateStrokeLength(float dist_meters);
   void updateDistance(float dist_meters);
   void updateTimer(const QString &time_str);
+  void updateClock(const QString &time_str); // Screen1 top-right clock (Label10)
   void updateSpeed(float speed_mps);
   void updatePace(const QString &pace_str);
   void setTrainingActive(bool active);

@@ -39,12 +39,12 @@ public:
   String getHDOP() const { return hdop; }
   int getSolvingSatellites() const { return solvingSatellites; }
   int getVisibleSatellites() const { return visibleSatellites; }
+  String getFixStatus() const { return fixStatus; }
+  String getDiffAge() const { return diffAge; }
   bool isActive() const { return gnssActive; }
   bool hasDataReceived() const {
     return lastValidGNSS > 0 && (millis() - lastValidGNSS) < 10000;
   } // 收到过数据且10秒内有效
-  String getFixStatus() const { return fixStatus; }
-  String getDiffAge() const { return diffAge; }
   GNSSPoint getInterpolatedPosition(unsigned long target_timestamp);
   String getDateTimeString() const { return ""; }
   bool isValidFix() const; // 判断当前定位是否有效

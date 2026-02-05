@@ -83,7 +83,7 @@ bool load_csv(const std::string &path, CsvData &out, std::string &error) {
   int idx_z = -1;
   for (size_t i = 0; i < headers.size(); ++i) {
     std::string key = to_lower(headers[i]);
-    if (key == "timestamp") {
+    if (key == "timestamp" || key == "sys_ms") {
       idx_ts = static_cast<int>(i);
     } else if (key == "acc_x") {
       idx_x = static_cast<int>(i);
@@ -95,7 +95,7 @@ bool load_csv(const std::string &path, CsvData &out, std::string &error) {
   }
 
   if (idx_ts < 0 || idx_x < 0 || idx_y < 0 || idx_z < 0) {
-    error = "CSV must contain headers: timestamp, acc_x, acc_y, acc_z";
+    error = "CSV must contain headers: sys_ms (or timestamp), acc_x, acc_y, acc_z";
     return false;
   }
 

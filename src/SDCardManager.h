@@ -4,6 +4,9 @@
 #include "FS.h"
 #include "SD_MMC.h"
 #include <Arduino.h>
+#include "freertos/FreeRTOS.h"
+#include "freertos/queue.h"
+#include "freertos/task.h"
 
 struct StrokeSnapshot;
 
@@ -46,6 +49,13 @@ public:
   String getCurrentSessionFolder() const { return currentSessionFolder; }
 
 private:
+  struct ImuSample {
+    uint32_t ts_ms;
+    float ax;
+    float ay;
+    float az;
+  };
+
   bool cardMounted;
   bool disabled;             // SD卡是否已被禁用（降级保护）
   uint8_t consecutiveErrors; // 连续错误计数
@@ -70,6 +80,16 @@ private:
   unsigned long lastFlushTime; // 上次flush时间
   static const unsigned long FLUSH_INTERVAL_MS = 500; // 每500ms刷新一次
   int trainingCounter;                                // 训练次数计数
+  long lastNmeaMs_;           // 最近一次含UTC的NMEA时间(ms, 当天)
+
+  // IMU异步写入
+  QueueHandle_t imuQueue;
+  TaskHandle_t imuTaskHandle;
+  bool imuLoggingEnabled;
+  static const size_t IMU_QUEUE_LEN = 512; // 保守容量，主循环快速返回
+  static const int IMU_BATCH_SIZE = 50;    // 单次批写条数，降低写放大
+
+  static void imuLogTask(void *param);
 
   struct AggregatedStats {
     bool active = false;

@@ -41,7 +41,8 @@ private slots:
   void onAxisChanged(int id);
   void onSimulationFinished();
   void onGnssUpdated(double speed_mps, double lat, double lon, int sats,
-                     QString pace);
+                     QString pace, const QString &hdop, const QString &fix,
+                     const QString &diff_age);
   void onSimTimeUpdated(qint64 sim_time_ms);
   void onStrokeDetected(const StrokeEvent &event);
   void updateUi();
