@@ -35,29 +35,33 @@ void GNSSProcessor::process() {
       }
     }
   }
-
-  // 卫星数据清理现在在processGSV()中处理，这里不需要重复计算
 }
 
 void GNSSProcessor::setSDCardManager(SDCardManager *sd) { _sdCard = sd; }
 
 void GNSSProcessor::processNMEA(const String &nmea) {
+  // 调试：打印接收到的NMEA数据
+  static unsigned long lastDebugPrint = 0;
+  if (millis() - lastDebugPrint > 5000) { // 每5秒打印一次
+    Serial.printf("[GNSS] Received NMEA: %s\n", nmea.c_str());
+    lastDebugPrint = millis();
+  }
+
   // 记录原始 NMEA 数据到 SD 卡
   if (_sdCard != nullptr) {
     _sdCard->logNmeaRaw(nmea);
+  } else {
+    static unsigned long lastSdWarning = 0;
+    if (millis() - lastSdWarning > 10000) {
+      Serial.println("[GNSS] Warning: SD card manager not set!");
+      lastSdWarning = millis();
+    }
   }
 
   if (nmea.startsWith("$GPVTG") || nmea.startsWith("$GNVTG")) {
     processVTG(nmea);
   } else if (nmea.startsWith("$GPGGA") || nmea.startsWith("$GNGGA")) {
     processGGA(nmea);
-  } else if (nmea.indexOf("GSV") == 3) {
-    // 匹配所有 $xxGSV 格式的句子（GPS/GLONASS/BeiDou/Galileo/QZSS/GNSS）
-    // $GPGSV, $GLGSV, $BDGSV, $GBGSV, $GAGSV, $GQGSV, $GNGSV 等
-    processGSV(nmea);
-#ifdef DEBUG_GSV_PRINT
-    printGSVPRNs(nmea);
-#endif
   }
 }
 
@@ -104,8 +108,9 @@ void GNSSProcessor::processGGA(const String &nmea) {
   _fixQuality = fixQuality;
 
   // 总是更新可用的基础数据字段，确保UI能及时反映状态变化
-  // 更新解算卫星数（即使信号质量不够好）
+  // 更新解算卫星数和可见卫星数（即使信号质量不够好）
   solvingSatellites = satCount;
+  visibleSatellites = satCount;
 
   // 有GNSS数据但无有效值时显示"--"
   if (!hdopStr.isEmpty() && hdopStr != "0.0" && hdopStr != "0") {
@@ -159,106 +164,6 @@ void GNSSProcessor::processGGA(const String &nmea) {
   }
   gnssActive = true;
   lastValidGNSS = millis();
-
-  // **优化3：兜底校验，确保逻辑一致性**
-  // 如果参与解算的卫星数大于可见卫星数，说明可见数统计有问题
-  // 使用参与解算数作为可见数的下限
-  if (solvingSatellites > visibleSatellites) {
-    visibleSatellites = solvingSatellites;
-  }
-}
-
-void GNSSProcessor::processGSV(const String &nmea) {
-  // 解析 GSV 字段：字段 1=total msgs, 2=msg num, 3=sats in view, 后续每 4
-  // 字段为一个卫星 (PRN, Elev, Az, SNR)
-  int totalMsg = parseNMEAField(nmea, 1).toInt();
-  int msgNum = parseNMEAField(nmea, 2).toInt();
-  int satsInView = parseNMEAField(nmea, 3).toInt();
-
-  // 确定星座类型的偏移量，避免PRN重复
-  // 基于实际数据中存在的 GSV 类型：$GPGSV/$GLGSV/$GBGSV/$GAGSV/$GQGSV
-  int constellationOffset = 0;
-  if (nmea.startsWith("$GPGSV")) {
-    constellationOffset = 0; // GPS: 1-32
-  } else if (nmea.startsWith("$GLGSV")) {
-    constellationOffset = 100; // GLONASS: 101-132
-  } else if (nmea.startsWith("$GBGSV")) {
-    constellationOffset = 200; // BeiDou: 201-232
-  } else if (nmea.startsWith("$GAGSV")) {
-    constellationOffset = 300; // Galileo: 301-332
-  } else if (nmea.startsWith("$GQGSV")) {
-    constellationOffset = 500; // QZSS: 501-532
-  } else if (nmea.startsWith("$GNGSV")) {
-    constellationOffset = 400; // 混合: 401+
-  }
-
-  // 更新每个卫星的最后看到时间，使用偏移量避免PRN冲突
-  uint32_t now = millis();
-  for (int field = 4; field < 20; field += 4) {
-    String prnStr = parseNMEAField(nmea, field);
-    if (!prnStr.isEmpty()) {
-      int prn = prnStr.toInt();
-      // 过滤无效 PRN（0 或负数）
-      if (prn > 0) {
-        int uniquePrn = prn + constellationOffset;
-        prnLastSeen[uniquePrn] = now;
-      }
-    }
-    // 即使 PRN 为空，也不影响 satsInView 的使用
-  }
-
-  // **优化1：立即更新可见卫星数**
-  // 取三个来源的最大值：
-  // 1. GSV 报告的 satsInView（权威来源）
-  // 2. 当前统计的唯一 PRN 数量
-  // 3. 已有的 visibleSatellites（避免回退）
-  int currentUniquePRNs = static_cast<int>(prnLastSeen.size());
-  visibleSatellites =
-      max(visibleSatellites, max(satsInView, currentUniquePRNs));
-
-  // **优化2：定期清理过期PRN，使用 PRN_TTL_MS 常量**
-  static uint32_t lastCleanup = 0;
-  // 使用 PRN_TTL_MS 的一半作为清理周期（1500ms），确保及时响应
-  if (now - lastCleanup > PRN_TTL_MS / 2) {
-    auto it = prnLastSeen.begin();
-    while (it != prnLastSeen.end()) {
-      if (now - it->second > PRN_TTL_MS) { // 使用头文件定义的常量（3000ms）
-        it = prnLastSeen.erase(it);
-      } else {
-        ++it;
-      }
-    }
-    lastCleanup = now;
-
-    // 清理后更新可见卫星数
-    visibleSatellites = static_cast<int>(prnLastSeen.size());
-  }
-}
-
-// Debug: 打印单条 GSV 中解析到的 PRN，方便与上位机对比
-void GNSSProcessor::printGSVPRNs(const String &nmea) {
-  std::vector<int> prns;
-  for (int field = 4; field < 20; field += 4) {
-    String prnStr = parseNMEAField(nmea, field);
-    if (!prnStr.isEmpty()) {
-      prns.push_back(prnStr.toInt());
-    }
-  }
-
-  // 打印原始句子和提取到的 PRN 列表
-  Serial.print("GSV: ");
-  Serial.println(nmea);
-  Serial.print("Parsed PRNs: ");
-  if (prns.empty()) {
-    Serial.println("(none)");
-  } else {
-    for (size_t i = 0; i < prns.size(); ++i) {
-      if (i)
-        Serial.print(",");
-      Serial.print(prns[i]);
-    }
-    Serial.println();
-  }
 }
 
 String GNSSProcessor::parseNMEAField(const String &s, uint8_t index) {
@@ -414,7 +319,6 @@ void GNSSProcessor::clearData() {
   // 不再设置默认值，让UI保持SquareLine Studio的默认值
   // hdop, fixStatus, diffAge 等字符串字段不清空
   // solvingSatellites, visibleSatellites 等计数字段不重置
-  prnLastSeen.clear();
   _history.clear(); // 清空历史数据
 }
 

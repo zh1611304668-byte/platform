@@ -1,0 +1,25 @@
+{
+	"BUILD_DIR" : "D:/Desktop/project-rawing/platform/111/stroke_sim_qt/build/Desktop_Qt_6_10_2_MinGW_64_bit-Debug/stroke_sim_qt_autogen",
+	"CMAKE_BINARY_DIR" : "D:/Desktop/project-rawing/platform/111/stroke_sim_qt/build/Desktop_Qt_6_10_2_MinGW_64_bit-Debug",
+	"CMAKE_CURRENT_BINARY_DIR" : "D:/Desktop/project-rawing/platform/111/stroke_sim_qt/build/Desktop_Qt_6_10_2_MinGW_64_bit-Debug",
+	"CMAKE_CURRENT_SOURCE_DIR" : "D:/Desktop/project-rawing/platform/111/stroke_sim_qt",
+	"CMAKE_SOURCE_DIR" : "D:/Desktop/project-rawing/platform/111/stroke_sim_qt",
+	"CROSS_CONFIG" : false,
+	"GENERATOR" : "Ninja",
+	"INCLUDE_DIR" : "D:/Desktop/project-rawing/platform/111/stroke_sim_qt/build/Desktop_Qt_6_10_2_MinGW_64_bit-Debug/stroke_sim_qt_autogen/include",
+	"INPUTS" : 
+	[
+		"D:/Desktop/project-rawing/platform/111/stroke_sim_qt/qml/MapView.qml"
+	],
+	"LOCK_FILE" : "D:/Desktop/project-rawing/platform/111/stroke_sim_qt/build/Desktop_Qt_6_10_2_MinGW_64_bit-Debug/CMakeFiles/stroke_sim_qt_autogen.dir/AutoRcc_resources_EWIEGA46WW_Lock.lock",
+	"MULTI_CONFIG" : false,
+	"OPTIONS" : [ "--no-zstd", "-name", "resources" ],
+	"OUTPUT_CHECKSUM" : "EWIEGA46WW",
+	"OUTPUT_NAME" : "qrc_resources.cpp",
+	"RCC_EXECUTABLE" : "C:/Qt/6.10.2/mingw_64/bin/rcc.exe",
+	"RCC_LIST_OPTIONS" : [ "--list" ],
+	"SETTINGS_FILE" : "D:/Desktop/project-rawing/platform/111/stroke_sim_qt/build/Desktop_Qt_6_10_2_MinGW_64_bit-Debug/CMakeFiles/stroke_sim_qt_autogen.dir/AutoRcc_resources_EWIEGA46WW_Used.txt",
+	"SOURCE" : "D:/Desktop/project-rawing/platform/111/stroke_sim_qt/resources.qrc",
+	"USE_BETTER_GRAPH" : true,
+	"VERBOSITY" : 0
+}

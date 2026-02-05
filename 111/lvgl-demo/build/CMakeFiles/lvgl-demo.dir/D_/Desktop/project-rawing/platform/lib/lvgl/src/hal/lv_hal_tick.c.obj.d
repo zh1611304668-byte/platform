@@ -1,0 +1,18 @@
+CMakeFiles/lvgl-demo.dir/D_/Desktop/project-rawing/platform/lib/lvgl/src/hal/lv_hal_tick.c.obj: \
+ D:\Desktop\project-rawing\platform\lib\lvgl\src\hal\lv_hal_tick.c \
+ D:\Desktop\project-rawing\platform\lib\lvgl\src\hal\lv_hal_tick.h \
+ D:/Desktop/project-rawing/platform/lib/lvgl/src/lv_conf_internal.h \
+ C:/Qt/Tools/mingw1310_64/lib/gcc/x86_64-w64-mingw32/13.1.0/include/stdint.h \
+ C:/Qt/Tools/mingw1310_64/x86_64-w64-mingw32/include/stdint.h \
+ C:/Qt/Tools/mingw1310_64/x86_64-w64-mingw32/include/crtdefs.h \
+ C:/Qt/Tools/mingw1310_64/x86_64-w64-mingw32/include/corecrt.h \
+ C:/Qt/Tools/mingw1310_64/x86_64-w64-mingw32/include/_mingw.h \
+ C:/Qt/Tools/mingw1310_64/x86_64-w64-mingw32/include/_mingw_mac.h \
+ C:/Qt/Tools/mingw1310_64/x86_64-w64-mingw32/include/_mingw_secapi.h \
+ C:/Qt/Tools/mingw1310_64/x86_64-w64-mingw32/include/vadefs.h \
+ C:/Qt/Tools/mingw1310_64/x86_64-w64-mingw32/include/sdks/_mingw_ddk.h \
+ C:/Qt/Tools/mingw1310_64/lib/gcc/x86_64-w64-mingw32/13.1.0/include/stddef.h \
+ C:/Qt/Tools/mingw1310_64/x86_64-w64-mingw32/include/stddef.h \
+ D:/Desktop/project-rawing/platform/lib/lvgl/src/lv_conf_kconfig.h \
+ D:/Desktop/project-rawing/platform/lib/lv_conf.h \
+ C:/Qt/Tools/mingw1310_64/lib/gcc/x86_64-w64-mingw32/13.1.0/include/stdbool.h

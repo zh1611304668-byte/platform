@@ -38,7 +38,7 @@ public:
   void logNmeaRaw(const String &nmea);
   void logDebug(const String &msg); // 记录调试日志
 
-  // SD卡配置记录NMEA原始数据
+  // SD卡配置记录NMEA原始数据（CSV格式）
   void finalizeTrainingReport(unsigned long totalDurationMs);
   void closeCurrentFile(); // 兼容旧接口，等同于closeCurrentFiles
   void closeCurrentFiles();
@@ -57,17 +57,17 @@ private:
   File imuFile;          // 三轴加速度文件
   File trainingJsonFile; // JSON采样文件
   File strokeCsvFile;    // 划桨CSV数据
-  File nmeaJsonFile;     // NMEA原始数据文件
+  File nmeaCsvFile;      // NMEA原始数据文件（CSV格式）
   File debugFile;        // 调试日志文件
 
   String currentLogFile; // 当前IMU日志文件名
   String trainingJsonPath;
   String strokeCsvPath;
-  String nmeaJsonPath;                                // NMEA原始数据文件路径
-  String debugPath;                                   // 调试日志文件路径
-  String currentSessionFolder;                        // 当前训练目录
-  String currentTrainId;                              // 当前训练ID
-  unsigned long lastFlushTime;                        // 上次flush时间
+  String nmeaCsvPath;          // NMEA原始数据文件路径（CSV格式）
+  String debugPath;            // 调试日志文件路径
+  String currentSessionFolder; // 当前训练目录
+  String currentTrainId;       // 当前训练ID
+  unsigned long lastFlushTime; // 上次flush时间
   static const unsigned long FLUSH_INTERVAL_MS = 500; // 每500ms刷新一次
   int trainingCounter;                                // 训练次数计数
 

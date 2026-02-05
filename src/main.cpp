@@ -138,35 +138,7 @@ QueueHandle_t keyQueue = nullptr;
 TaskHandle_t keyTaskHandle = nullptr;
 TaskHandle_t mqttTaskHandle = nullptr;
 
-// ===================== 异步IMU日志相关 =====================
-struct ImuLogData {
-  unsigned long timestamp;
-  float ax;
-  float ay;
-  float az;
-};
-QueueHandle_t imuLogQueue = nullptr;
-TaskHandle_t sdLogTaskHandle = nullptr;
-
-void sdLogTask(void *pvParameters) {
-  ImuLogData data;
-  Serial.println("[SDLogTask] 任务已启动");
-
-  while (true) {
-    // 等待队列数据 (阻塞直到有数据)
-    if (xQueueReceive(imuLogQueue, &data, portMAX_DELAY) == pdTRUE) {
-      // 只有当训练处于活动状态且SD卡正常时才写入
-      // logImuData 内部会检查 imuFile 是否有效
-      sdCardManager.logImuData(data.timestamp, data.ax, data.ay, data.az);
-
-      // Heartbeat logs (optional, commented out to avoid spam)
-      // static uint32_t count = 0;
-      // if (count++ % 100 == 0) Serial.println("[SDLogTask] Processed 100 IMU
-      // logs");
-    }
-  }
-}
-// ========================================================
+// IMU数据记录已改为直接调用（带内部缓冲），无需队列和异步任务
 
 static lv_obj_t *dot;
 
@@ -473,18 +445,7 @@ void setup() {
     esp_restart();
   }
 
-  // 初始化IMU日志队列
-  imuLogQueue = xQueueCreate(128, sizeof(ImuLogData));
-  if (!imuLogQueue) {
-    Serial.println("FATAL: IMU log queue creation failed!");
-  }
-
-  // 创建SD日志任务 - 固定到Core 0，优先级降低到0以避免干扰主循环
-  BaseType_t sdTaskResult = xTaskCreatePinnedToCore(
-      sdLogTask, "SDLogTask", 4096, NULL, 0, &sdLogTaskHandle, 0);
-  if (sdTaskResult != pdPASS) {
-    Serial.println("FATAL: SD log task creation failed!");
-  }
+  // IMU日志已改为直接写入（内部缓冲），不再需要队列和异步任务
 
   optimizeTaskPriorities();
 
@@ -535,17 +496,8 @@ void loop() {
       float ax, ay, az;
       imu.getAcceleration(ax, ay, az);
 
-      ImuLogData logData;
-      logData.timestamp = millis();
-      logData.ax = ax;
-      logData.ay = ay;
-      logData.az = az;
-
-      // 发送到队列 (非阻塞)
-      // 如果队列满，为了保护主循环流畅性，选择丢弃数据而不是阻塞
-      if (imuLogQueue != nullptr) {
-        xQueueSend(imuLogQueue, &logData, 0);
-      }
+      // 使用now作为时间戳，确保记录的是采样时间而非写入时间
+      sdCardManager.logImuData(now, ax, ay, az);
     }
 
     if (sdCardManager.isDisabled() && (now - lastSdStatusPrint > 30000)) {
@@ -1148,7 +1100,6 @@ void loop() {
     lv_label_set_text(ui_Label10, displayTimeStr.c_str());
 
     int solvingSats = gnss.getSolvingSatellites();
-    int visibleSats = gnss.getVisibleSatellites();
     bool hasGnssData = gnss.hasDataReceived();
     static unsigned long lastGnssLabelUpdate = 0;
 
@@ -1158,11 +1109,8 @@ void loop() {
       if (hasGnssData) {
         snprintf(tmp, sizeof(tmp), "%02d", solvingSats);
         lv_label_set_text(ui_Label15, tmp);
-        snprintf(tmp, sizeof(tmp), "%02d", visibleSats);
-        lv_label_set_text(ui_Label16, tmp);
       } else {
         lv_label_set_text(ui_Label15, "00");
-        lv_label_set_text(ui_Label16, "00");
       }
 
       if (hasGnssData) {

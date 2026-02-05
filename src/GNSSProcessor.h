@@ -47,9 +47,6 @@ private:
   void processNMEA(const String &nmea);
   void processVTG(const String &nmea);
   void processGGA(const String &nmea);
-  void processGSV(const String &nmea);
-  // Debug helper: print PRNs parsed from a single GSV sentence to Serial
-  void printGSVPRNs(const String &nmea);
   String parseNMEAField(const String &s, uint8_t index);
   double convertCoordinate(const String &coord, const String &direction);
   void clearData();
@@ -66,11 +63,8 @@ private:
   String hdop;
   String fixStatus;
   String diffAge;
-  int solvingSatellites;
-  int visibleSatellites;
-  uint32_t lastVisibleRecalc = 0;
-  std::map<int, uint32_t> prnLastSeen;
-  static const uint32_t PRN_TTL_MS = 3000;
+  int solvingSatellites = 0;
+  int visibleSatellites = 0;
   int _fixQuality = 0; // 当前定位质量（0=无定位，1=GPS，4=RTK固定等）
 
   // 用于坐标插值的历史数据

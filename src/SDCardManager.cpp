@@ -18,7 +18,7 @@ extern ConfigManager configManager;
 SDCardManager::SDCardManager()
     : cardMounted(false), disabled(false), consecutiveErrors(0),
       trainingCounter(0), currentLogFile(""), trainingJsonPath(""),
-      strokeCsvPath(""), nmeaJsonPath(""), debugPath(""),
+      strokeCsvPath(""), nmeaCsvPath(""), debugPath(""),
       currentSessionFolder(""), currentTrainId(""), lastErrorTime(0),
       lastFlushTime(0) {
   resetStats();
@@ -83,27 +83,48 @@ void SDCardManager::logImuData(unsigned long timestamp, float ax, float ay,
     return;
   }
 
-  char dataLine[128];
-  snprintf(dataLine, sizeof(dataLine), "%lu,%.4f,%.4f,%.4f\n", timestamp, ax,
-           ay, az);
+  // 内部缓冲区 - 使用static在调用间保持数据
+  static char buffer[2048]; // 约15-20条样本数据
+  static int bufferLen = 0;
+  static int sampleCount = 0;
 
-  size_t written = imuFile.print(dataLine);
-  if (written > 0) {
-    consecutiveErrors = 0;
-    unsigned long now = millis();
-    if (now - lastFlushTime > FLUSH_INTERVAL_MS) {
-      imuFile.flush();
-      lastFlushTime = now;
-    }
-  } else {
-    consecutiveErrors++;
-    lastErrorTime = millis();
+  // 格式化数据到缓冲区
+  int written = snprintf(buffer + bufferLen, sizeof(buffer) - bufferLen,
+                         "%lu,%.4f,%.4f,%.4f\n", timestamp, ax, ay, az);
 
-    if (consecutiveErrors >= MAX_CONSECUTIVE_ERRORS) {
-      disabled = true;
+  // 缓冲区溢出保护
+  if (written < 0 || written >= (int)(sizeof(buffer) - bufferLen)) {
+    // 立即刷新现有数据
+    if (bufferLen > 0) {
+      imuFile.print(buffer);
       imuFile.flush();
-      imuFile.close();
     }
+    bufferLen = 0;
+    sampleCount = 0;
+    return;
+  }
+
+  bufferLen += written;
+  sampleCount++;
+
+  // 刷新条件：缓冲区接近满(>1800字节) 或 累积20条样本
+  if (bufferLen > 1800 || sampleCount >= 20) {
+    size_t flushed = imuFile.print(buffer);
+    if (flushed > 0) {
+      imuFile.flush();
+      consecutiveErrors = 0;
+      lastFlushTime = millis();
+    } else {
+      consecutiveErrors++;
+      lastErrorTime = millis();
+
+      if (consecutiveErrors >= MAX_CONSECUTIVE_ERRORS) {
+        disabled = true;
+        imuFile.close();
+      }
+    }
+    bufferLen = 0;
+    sampleCount = 0;
   }
 }
 
@@ -149,7 +170,6 @@ void SDCardManager::startNewTrainingFile(const String &trainId,
   snprintf(baseName, sizeof(baseName), "imu_log_%03d", nextNumber);
   String base(baseName);
 
-  currentLogFile = "/" + base + ".csv";
   currentSessionFolder = "/" + base + "_" + safeTrainId;
   if (currentSessionFolder.length() > 60) {
     currentSessionFolder = currentSessionFolder.substring(0, 60);
@@ -159,6 +179,11 @@ void SDCardManager::startNewTrainingFile(const String &trainId,
     currentSessionFolder += "_" + String((uint32_t)millis(), HEX);
   }
   ensureSessionFolder();
+
+  // 将IMU文件也放入训练文件夹中
+  char imuFileName[32];
+  snprintf(imuFileName, sizeof(imuFileName), "imu_log_%03d.csv", nextNumber);
+  currentLogFile = currentSessionFolder + "/" + String(imuFileName);
 
   imuFile = SD_MMC.open(currentLogFile.c_str(), FILE_WRITE);
   if (!imuFile) {
@@ -186,9 +211,27 @@ void SDCardManager::startNewTrainingFile(const String &trainId,
     strokeCsvFile.flush();
   }
 
-  // 创建 NMEA 原始数据文件
-  nmeaJsonPath = currentSessionFolder + "/nmea_raw.jsonl";
-  nmeaJsonFile = SD_MMC.open(nmeaJsonPath.c_str(), FILE_WRITE);
+  // 创建 NMEA 原始数据文件（CSV格式）
+  char gnssFileName[32];
+  snprintf(gnssFileName, sizeof(gnssFileName), "gnss_%03d.csv", nextNumber);
+  nmeaCsvPath = currentSessionFolder + "/" + String(gnssFileName);
+  nmeaCsvFile = SD_MMC.open(nmeaCsvPath.c_str(), FILE_WRITE);
+
+  if (nmeaCsvFile) {
+    Serial.printf("[SD] ✅ Opened GNSS file: %s\n", nmeaCsvPath.c_str());
+    // 使用position()而不是size()，更可靠地检测新文件
+    if (nmeaCsvFile.position() == 0) {
+      nmeaCsvFile.println("timestamp,nmea");
+      nmeaCsvFile.flush();
+      Serial.println("[SD] ✅ GNSS CSV header written");
+    } else {
+      Serial.printf("[SD] ℹ️ GNSS file exists, position=%d\n",
+                    nmeaCsvFile.position());
+    }
+  } else {
+    Serial.printf("[SD] ❌ Failed to open GNSS file: %s\n",
+                  nmeaCsvPath.c_str());
+  }
 
   currentTrainId = safeTrainId;
   lastFlushTime = millis();
@@ -300,43 +343,55 @@ void SDCardManager::appendPerStrokeCsv(const StrokeSnapshot &snapshot) {
 }
 
 void SDCardManager::logNmeaRaw(const String &nmea) {
+  static unsigned long nmeaCount = 0;
+  static unsigned long lastDebugPrint = 0;
+
+  nmeaCount++;
+
+  // 每10秒打印一次统计信息
+  if (millis() - lastDebugPrint > 10000) {
+    Serial.printf("[SD] NMEA stats: Total=%lu, Mounted=%d, Disabled=%d, "
+                  "Active=%d, FileOpen=%d\n",
+                  nmeaCount, cardMounted, disabled, stats.active,
+                  (bool)nmeaCsvFile);
+    lastDebugPrint = millis();
+  }
+
   if (!cardMounted || disabled || !stats.active) {
+    static unsigned long lastWarning = 0;
+    if (millis() - lastWarning > 10000) {
+      Serial.printf(
+          "[SD] NMEA not logged: mounted=%d, disabled=%d, active=%d\n",
+          cardMounted, disabled, stats.active);
+      lastWarning = millis();
+    }
     return;
   }
-  if (!nmeaJsonFile) {
+  if (!nmeaCsvFile) {
+    static unsigned long lastFileWarning = 0;
+    if (millis() - lastFileWarning > 10000) {
+      Serial.println("[SD] NMEA file not open!");
+      lastFileWarning = millis();
+    }
     return;
   }
 
-  // 构造 JSON 行: {"ts": "RTC时间", "ms": millis(), "raw": "NMEA字符串"}
-  // 使用RTC时间确保与其他数据文件对齐
-  extern bool rtcInitialized;
-  extern bool rtcTimeSynced;
-  extern String getRTCFullDateTime();
+  // 使用millis()作为时间戳，与IMU数据格式一致，便于对齐
+  unsigned long timestamp = millis();
 
-  String timestamp;
-  if (rtcInitialized && rtcTimeSynced) {
-    timestamp = getRTCFullDateTime();
-  } else {
-    timestamp = String(millis()); // 降级为millis
-  }
+  String csvLine;
+  csvLine.reserve(nmea.length() + 20);
+  csvLine += timestamp;
+  csvLine += ",";
+  csvLine += nmea;
 
-  String json;
-  json.reserve(nmea.length() + 80);
-  json += "{\"ts\":\"";
-  json += timestamp;
-  json += "\",\"ms\":";
-  json += millis(); // 保留毫秒用于精确对齐
-  json += ",\"raw\":\"";
-  json += nmea;
-  json += "\"}";
-
-  nmeaJsonFile.println(json);
+  nmeaCsvFile.println(csvLine);
 
   // 定期 flush，与 stroke 文件一起
   unsigned long now = millis();
   if (now - lastFlushTime > FLUSH_INTERVAL_MS) {
-    if (nmeaJsonFile)
-      nmeaJsonFile.flush();
+    if (nmeaCsvFile)
+      nmeaCsvFile.flush();
     lastFlushTime = now; // 更新 flush 时间，避免频繁落盘
   }
 }
@@ -395,11 +450,11 @@ void SDCardManager::closeCurrentFiles() {
     strokeCsvFile.close();
     strokeCsvFile = File();
   }
-  if (nmeaJsonFile) {
-    nmeaJsonFile.flush();
-    nmeaJsonFile.close();
+  if (nmeaCsvFile) {
+    nmeaCsvFile.flush();
+    nmeaCsvFile.close();
   }
-  nmeaJsonFile = File();
+  nmeaCsvFile = File();
 
   // 关闭调试日志文件
   if (debugFile) {
@@ -412,7 +467,7 @@ void SDCardManager::closeCurrentFiles() {
   trainingJsonPath = "";
   trainingJsonFile = File();
   strokeCsvPath = "";
-  nmeaJsonPath = "";
+  nmeaCsvPath = "";
   currentSessionFolder = "";
   currentTrainId = "";
   stats.active = false;
@@ -434,10 +489,17 @@ int SDCardManager::getNextTrainingNumber() {
   File file = root.openNextFile();
   while (file) {
     String name = String(file.name());
-    if (name.startsWith("imu_log_") && name.endsWith(".csv")) {
-      int startIdx = name.indexOf("_") + 1;
-      startIdx = name.indexOf("_", startIdx) + 1;
-      int endIdx = name.lastIndexOf(".");
+    // 查找文件夹而不是CSV文件，因为现在IMU文件在文件夹里
+    if (file.isDirectory() && name.startsWith("imu_log_")) {
+      // 提取编号：imu_log_026_trainId -> 026
+      int startIdx = name.indexOf("_") + 1;       // 跳过 "imu"
+      startIdx = name.indexOf("_", startIdx) + 1; // 跳过 "log"
+      int endIdx = name.indexOf("_", startIdx);   // 找到训练ID前的下划线
+
+      if (endIdx < 0) {
+        endIdx = name.length(); // 如果没有下划线（不应该发生），用整个字符串
+      }
+
       if (startIdx > 0 && endIdx > startIdx) {
         String numStr = name.substring(startIdx, endIdx);
         int num = numStr.toInt();
@@ -451,6 +513,8 @@ int SDCardManager::getNextTrainingNumber() {
   root.close();
 
   int nextNumber = maxNumber + 1;
+  Serial.printf("[SD] Next training number: %d (max found: %d)\n", nextNumber,
+                maxNumber);
   return nextNumber;
 }
 

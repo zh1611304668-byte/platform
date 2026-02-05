@@ -1,0 +1,78 @@
+{
+	"configurations" : 
+	[
+		{
+			"directories" : 
+			[
+				{
+					"build" : ".",
+					"jsonFile" : "directory-.-Debug-d0094a50bb2071803777.json",
+					"minimumCMakeVersion" : 
+					{
+						"string" : "3.16"
+					},
+					"projectIndex" : 0,
+					"source" : ".",
+					"targetIndexes" : 
+					[
+						0,
+						1,
+						2
+					]
+				}
+			],
+			"name" : "Debug",
+			"projects" : 
+			[
+				{
+					"directoryIndexes" : 
+					[
+						0
+					],
+					"name" : "stroke_sim_qt",
+					"targetIndexes" : 
+					[
+						0,
+						1,
+						2
+					]
+				}
+			],
+			"targets" : 
+			[
+				{
+					"directoryIndex" : 0,
+					"id" : "stroke_sim_qt::@6890427a1f51a3e7e1df",
+					"jsonFile" : "target-stroke_sim_qt-Debug-569906bc856b14921db8.json",
+					"name" : "stroke_sim_qt",
+					"projectIndex" : 0
+				},
+				{
+					"directoryIndex" : 0,
+					"id" : "stroke_sim_qt_autogen::@6890427a1f51a3e7e1df",
+					"jsonFile" : "target-stroke_sim_qt_autogen-Debug-828763c66568d025953e.json",
+					"name" : "stroke_sim_qt_autogen",
+					"projectIndex" : 0
+				},
+				{
+					"directoryIndex" : 0,
+					"id" : "stroke_sim_qt_autogen_timestamp_deps::@6890427a1f51a3e7e1df",
+					"jsonFile" : "target-stroke_sim_qt_autogen_timestamp_deps-Debug-a0d9fb93c5a7edeca5ba.json",
+					"name" : "stroke_sim_qt_autogen_timestamp_deps",
+					"projectIndex" : 0
+				}
+			]
+		}
+	],
+	"kind" : "codemodel",
+	"paths" : 
+	{
+		"build" : "D:/Desktop/project-rawing/platform/111/stroke_sim_qt/build/Desktop_Qt_6_10_2_MinGW_64_bit-Debug",
+		"source" : "D:/Desktop/project-rawing/platform/111/stroke_sim_qt"
+	},
+	"version" : 
+	{
+		"major" : 2,
+		"minor" : 7
+	}
+}

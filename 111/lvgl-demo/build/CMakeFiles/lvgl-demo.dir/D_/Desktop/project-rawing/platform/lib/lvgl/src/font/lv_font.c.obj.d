@@ -1,0 +1,29 @@
+CMakeFiles/lvgl-demo.dir/D_/Desktop/project-rawing/platform/lib/lvgl/src/font/lv_font.c.obj: \
+ D:\Desktop\project-rawing\platform\lib\lvgl\src\font\lv_font.c \
+ D:\Desktop\project-rawing\platform\lib\lvgl\src\font\lv_font.h \
+ D:/Desktop/project-rawing/platform/lib/lvgl/src/lv_conf_internal.h \
+ C:/Qt/Tools/mingw1310_64/lib/gcc/x86_64-w64-mingw32/13.1.0/include/stdint.h \
+ C:/Qt/Tools/mingw1310_64/x86_64-w64-mingw32/include/stdint.h \
+ C:/Qt/Tools/mingw1310_64/x86_64-w64-mingw32/include/crtdefs.h \
+ C:/Qt/Tools/mingw1310_64/x86_64-w64-mingw32/include/corecrt.h \
+ C:/Qt/Tools/mingw1310_64/x86_64-w64-mingw32/include/_mingw.h \
+ C:/Qt/Tools/mingw1310_64/x86_64-w64-mingw32/include/_mingw_mac.h \
+ C:/Qt/Tools/mingw1310_64/x86_64-w64-mingw32/include/_mingw_secapi.h \
+ C:/Qt/Tools/mingw1310_64/x86_64-w64-mingw32/include/vadefs.h \
+ C:/Qt/Tools/mingw1310_64/x86_64-w64-mingw32/include/sdks/_mingw_ddk.h \
+ C:/Qt/Tools/mingw1310_64/lib/gcc/x86_64-w64-mingw32/13.1.0/include/stddef.h \
+ C:/Qt/Tools/mingw1310_64/x86_64-w64-mingw32/include/stddef.h \
+ D:/Desktop/project-rawing/platform/lib/lvgl/src/lv_conf_kconfig.h \
+ D:/Desktop/project-rawing/platform/lib/lv_conf.h \
+ C:/Qt/Tools/mingw1310_64/lib/gcc/x86_64-w64-mingw32/13.1.0/include/stdbool.h \
+ D:\Desktop\project-rawing\platform\lib\lvgl\src\font\lv_symbol_def.h \
+ D:/Desktop/project-rawing/platform/lib/lvgl/src/misc/lv_area.h \
+ D:/Desktop/project-rawing/platform/lib/lvgl/src/lv_conf_internal.h \
+ D:/Desktop/project-rawing/platform/lib/lvgl/src/misc/lv_utils.h \
+ D:/Desktop/project-rawing/platform/lib/lvgl/src/misc/lv_log.h \
+ D:/Desktop/project-rawing/platform/lib/lvgl/src/misc/lv_types.h \
+ D:/Desktop/project-rawing/platform/lib/lvgl/src/misc/lv_assert.h \
+ D:/Desktop/project-rawing/platform/lib/lvgl/src/misc/lv_log.h \
+ D:/Desktop/project-rawing/platform/lib/lvgl/src/misc/lv_mem.h \
+ C:/Qt/Tools/mingw1310_64/x86_64-w64-mingw32/include/string.h \
+ C:/Qt/Tools/mingw1310_64/x86_64-w64-mingw32/include/sec_api/string_s.h

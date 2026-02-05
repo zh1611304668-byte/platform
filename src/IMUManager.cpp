@@ -276,12 +276,23 @@ void IMUManager::_calculateStrokeRate() {
             _lastStrokeTime = _peakMaxTime;
             _hasNewStroke = true;
 
-            // 获取当前GPS位置并设置到Metrics
+            // 获取划桨峰值时刻的精确GPS位置（使用插值）
             double currentLat = 0.0;
             double currentLon = 0.0;
             if (_gnss != nullptr) {
-              currentLat = _gnss->getLatitude();
-              currentLon = _gnss->getLongitude();
+              // 使用峰值时间戳进行插值，消除GNSS更新延迟的影响
+              GNSSPoint interpolated =
+                  _gnss->getInterpolatedPosition(_peakMaxTime);
+
+              if (interpolated.valid) {
+                // 插值成功，使用插值结果（精确到峰值瞬间）
+                currentLat = interpolated.latitude;
+                currentLon = interpolated.longitude;
+              } else {
+                // 插值失败（例如历史数据不足），回退到最新位置
+                currentLat = _gnss->getLatitude();
+                currentLon = _gnss->getLongitude();
+              }
             }
 
             // 更新Metrics
@@ -301,8 +312,8 @@ void IMUManager::_calculateStrokeRate() {
             }
 
             Serial.printf(
-                "✅ [划桨确认] #%d, 振幅=%.3fg, 桨频=%.1f, 距离=%.2fm\n",
-                _strokeCount, amplitude, _strokeRate, _strokeDistance);
+                "✅ [划桨] #%d, 振幅=%.3fg, 桨频=%.1f, GPS[%.7f,%.7f]\n",
+                _strokeCount, amplitude, _strokeRate, currentLat, currentLon);
 
             _strokeState = STATE_COOLDOWN;
             _phaseStartTime = now;
@@ -392,19 +403,6 @@ double IMUManager::getLastStrokeEndLatitude() const {
 }
 double IMUManager::getLastStrokeEndLongitude() const {
   return _lastStrokeEndLon;
-}
-
-double IMUManager::_haversine(double lat1, double lon1, double lat2,
-                              double lon2) {
-  const double R = 6371000.0;
-  double dLat = (lat2 - lat1) * M_PI / 180.0;
-  double dLon = (lon2 - lon1) * M_PI / 180.0;
-  lat1 = lat1 * M_PI / 180.0;
-  lat2 = lat2 * M_PI / 180.0;
-  double a = sin(dLat / 2) * sin(dLat / 2) +
-             sin(dLon / 2) * sin(dLon / 2) * cos(lat1) * cos(lat2);
-  double c = 2 * atan2(sqrt(a), sqrt(1 - a));
-  return R * c;
 }
 
 // Butterworth 2阶低通

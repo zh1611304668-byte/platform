@@ -221,7 +221,6 @@ private:
   void _initSensor();
   void _calculateStrokeRate();
   void _processAccelerationData(float accX, float accY, float accZ);
-  double _haversine(double lat1, double lon1, double lat2, double lon2);
   bool _acquireStrokePosition(double &lat, double &lon);
   float _butterworthFilter(float input, int axis);
   float _emaFilter(float input, int axis); ///< EMA二次平滑滤波

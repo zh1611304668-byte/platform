@@ -1,0 +1,3 @@
+"C:\Program Files\CMake\bin\cmake.exe" -E rm -f CMakeFiles\stroke_sim_qt.dir/objects.a
+C:\devtools\mingw64\bin\ar.exe qc CMakeFiles\stroke_sim_qt.dir/objects.a @CMakeFiles\stroke_sim_qt.dir\objects1.rsp
+C:\devtools\mingw64\bin\c++.exe -O3 -DNDEBUG -Wl,--whole-archive CMakeFiles\stroke_sim_qt.dir/objects.a -Wl,--no-whole-archive -o stroke_sim_qt.exe -Wl,--out-implib,libstroke_sim_qt.dll.a -Wl,--major-image-version,0,--minor-image-version,0 @CMakeFiles\stroke_sim_qt.dir\linkLibs.rsp
