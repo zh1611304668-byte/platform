@@ -1,0 +1,2873 @@
+{
+	"artifacts" : 
+	[
+		{
+			"path" : "stroke_sim_qt.exe"
+		},
+		{
+			"path" : "stroke_sim_qt.pdb"
+		}
+	],
+	"backtrace" : 1,
+	"backtraceGraph" : 
+	{
+		"commands" : 
+		[
+			"add_executable",
+			"target_link_libraries",
+			"set_target_properties",
+			"include",
+			"find_package",
+			"find_dependency",
+			"_qt_internal_find_qt_dependencies",
+			"add_definitions",
+			"include_directories"
+		],
+		"files" : 
+		[
+			"CMakeLists.txt",
+			"C:/Qt/6.10.2/mingw_64/lib/cmake/Qt6Charts/Qt6ChartsTargets.cmake",
+			"C:/Qt/6.10.2/mingw_64/lib/cmake/Qt6Charts/Qt6ChartsConfig.cmake",
+			"build/Desktop_Qt_6_10_2_MinGW_64_bit-Debug/.qtc/package-manager/maintenance_tool_provider.cmake",
+			"C:/Qt/6.10.2/mingw_64/lib/cmake/Qt6Location/Qt6LocationTargets.cmake",
+			"C:/Qt/6.10.2/mingw_64/lib/cmake/Qt6Location/Qt6LocationConfig.cmake",
+			"C:/Qt/6.10.2/mingw_64/lib/cmake/Qt6Widgets/Qt6WidgetsTargets.cmake",
+			"C:/Qt/6.10.2/mingw_64/lib/cmake/Qt6Widgets/Qt6WidgetsConfig.cmake",
+			"C:/Qt/6.10.2/mingw_64/lib/cmake/Qt6Gui/Qt6GuiTargets.cmake",
+			"C:/Qt/6.10.2/mingw_64/lib/cmake/Qt6Gui/Qt6GuiConfig.cmake",
+			"C:/Qt/Tools/CMake_64/share/cmake-3.30/Modules/CMakeFindDependencyMacro.cmake",
+			"C:/Qt/6.10.2/mingw_64/lib/cmake/Qt6/QtPublicDependencyHelpers.cmake",
+			"C:/Qt/6.10.2/mingw_64/lib/cmake/Qt6Widgets/Qt6WidgetsDependencies.cmake",
+			"C:/Qt/6.10.2/mingw_64/lib/cmake/Qt6Qml/Qt6QmlTargets.cmake",
+			"C:/Qt/6.10.2/mingw_64/lib/cmake/Qt6Qml/Qt6QmlConfig.cmake",
+			"C:/Qt/6.10.2/mingw_64/lib/cmake/Qt6Network/Qt6NetworkTargets.cmake",
+			"C:/Qt/6.10.2/mingw_64/lib/cmake/Qt6Network/Qt6NetworkConfig.cmake",
+			"C:/Qt/6.10.2/mingw_64/lib/cmake/Qt6Qml/Qt6QmlDependencies.cmake",
+			"C:/Qt/6.10.2/mingw_64/lib/cmake/Qt6Core/Qt6CoreTargets.cmake",
+			"C:/Qt/6.10.2/mingw_64/lib/cmake/Qt6Core/Qt6CoreConfig.cmake"
+		],
+		"nodes" : 
+		[
+			{
+				"file" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 71,
+				"parent" : 0
+			},
+			{
+				"command" : 1,
+				"file" : 0,
+				"line" : 103,
+				"parent" : 0
+			},
+			{
+				"command" : 4,
+				"file" : 0,
+				"line" : 11,
+				"parent" : 0
+			},
+			{
+				"command" : 4,
+				"file" : 3,
+				"line" : 315,
+				"parent" : 3
+			},
+			{
+				"file" : 2,
+				"parent" : 4
+			},
+			{
+				"command" : 3,
+				"file" : 2,
+				"line" : 52,
+				"parent" : 5
+			},
+			{
+				"file" : 1,
+				"parent" : 6
+			},
+			{
+				"command" : 2,
+				"file" : 1,
+				"line" : 61,
+				"parent" : 7
+			},
+			{
+				"command" : 4,
+				"file" : 3,
+				"line" : 315,
+				"parent" : 3
+			},
+			{
+				"file" : 5,
+				"parent" : 9
+			},
+			{
+				"command" : 3,
+				"file" : 5,
+				"line" : 52,
+				"parent" : 10
+			},
+			{
+				"file" : 4,
+				"parent" : 11
+			},
+			{
+				"command" : 2,
+				"file" : 4,
+				"line" : 61,
+				"parent" : 12
+			},
+			{
+				"command" : 4,
+				"file" : 3,
+				"line" : 315,
+				"parent" : 3
+			},
+			{
+				"file" : 7,
+				"parent" : 14
+			},
+			{
+				"command" : 3,
+				"file" : 7,
+				"line" : 52,
+				"parent" : 15
+			},
+			{
+				"file" : 6,
+				"parent" : 16
+			},
+			{
+				"command" : 2,
+				"file" : 6,
+				"line" : 61,
+				"parent" : 17
+			},
+			{
+				"command" : 3,
+				"file" : 7,
+				"line" : 40,
+				"parent" : 15
+			},
+			{
+				"file" : 12,
+				"parent" : 19
+			},
+			{
+				"command" : 6,
+				"file" : 12,
+				"line" : 50,
+				"parent" : 20
+			},
+			{
+				"command" : 5,
+				"file" : 11,
+				"line" : 142,
+				"parent" : 21
+			},
+			{
+				"command" : 4,
+				"file" : 10,
+				"line" : 76,
+				"parent" : 22
+			},
+			{
+				"command" : 4,
+				"file" : 3,
+				"line" : 333,
+				"parent" : 23
+			},
+			{
+				"file" : 9,
+				"parent" : 24
+			},
+			{
+				"command" : 3,
+				"file" : 9,
+				"line" : 52,
+				"parent" : 25
+			},
+			{
+				"file" : 8,
+				"parent" : 26
+			},
+			{
+				"command" : 2,
+				"file" : 8,
+				"line" : 61,
+				"parent" : 27
+			},
+			{
+				"command" : 4,
+				"file" : 3,
+				"line" : 315,
+				"parent" : 3
+			},
+			{
+				"file" : 14,
+				"parent" : 29
+			},
+			{
+				"command" : 3,
+				"file" : 14,
+				"line" : 55,
+				"parent" : 30
+			},
+			{
+				"file" : 13,
+				"parent" : 31
+			},
+			{
+				"command" : 2,
+				"file" : 13,
+				"line" : 61,
+				"parent" : 32
+			},
+			{
+				"command" : 3,
+				"file" : 14,
+				"line" : 43,
+				"parent" : 30
+			},
+			{
+				"file" : 17,
+				"parent" : 34
+			},
+			{
+				"command" : 6,
+				"file" : 17,
+				"line" : 50,
+				"parent" : 35
+			},
+			{
+				"command" : 5,
+				"file" : 11,
+				"line" : 142,
+				"parent" : 36
+			},
+			{
+				"command" : 4,
+				"file" : 10,
+				"line" : 76,
+				"parent" : 37
+			},
+			{
+				"command" : 4,
+				"file" : 3,
+				"line" : 333,
+				"parent" : 38
+			},
+			{
+				"file" : 16,
+				"parent" : 39
+			},
+			{
+				"command" : 3,
+				"file" : 16,
+				"line" : 52,
+				"parent" : 40
+			},
+			{
+				"file" : 15,
+				"parent" : 41
+			},
+			{
+				"command" : 2,
+				"file" : 15,
+				"line" : 61,
+				"parent" : 42
+			},
+			{
+				"command" : 4,
+				"file" : 3,
+				"line" : 315,
+				"parent" : 3
+			},
+			{
+				"file" : 19,
+				"parent" : 44
+			},
+			{
+				"command" : 3,
+				"file" : 19,
+				"line" : 54,
+				"parent" : 45
+			},
+			{
+				"file" : 18,
+				"parent" : 46
+			},
+			{
+				"command" : 2,
+				"file" : 18,
+				"line" : 61,
+				"parent" : 47
+			},
+			{
+				"command" : 7,
+				"file" : 0,
+				"line" : 68,
+				"parent" : 0
+			},
+			{
+				"command" : 7,
+				"file" : 0,
+				"line" : 69,
+				"parent" : 0
+			},
+			{
+				"command" : 8,
+				"file" : 0,
+				"line" : 50,
+				"parent" : 0
+			}
+		]
+	},
+	"compileGroups" : 
+	[
+		{
+			"compileCommandFragments" : 
+			[
+				{
+					"fragment" : "-DQT_QML_DEBUG -g -std=gnu++17 -fdiagnostics-color=always"
+				}
+			],
+			"defines" : 
+			[
+				{
+					"backtrace" : 49,
+					"define" : "LV_CONF_INCLUDE_SIMPLE"
+				},
+				{
+					"backtrace" : 50,
+					"define" : "LV_CONF_PATH=D:/Desktop/project-rawing/platform/111/stroke_sim_qt/../../lib/lv_conf.h"
+				},
+				{
+					"backtrace" : 2,
+					"define" : "MINGW_HAS_SECURE_API=1"
+				},
+				{
+					"backtrace" : 2,
+					"define" : "QT_CHARTS_LIB"
+				},
+				{
+					"backtrace" : 2,
+					"define" : "QT_CORE_LIB"
+				},
+				{
+					"backtrace" : 2,
+					"define" : "QT_GUI_LIB"
+				},
+				{
+					"backtrace" : 2,
+					"define" : "QT_LOCATION_LIB"
+				},
+				{
+					"backtrace" : 2,
+					"define" : "QT_NETWORK_LIB"
+				},
+				{
+					"backtrace" : 2,
+					"define" : "QT_OPENGLWIDGETS_LIB"
+				},
+				{
+					"backtrace" : 2,
+					"define" : "QT_OPENGL_LIB"
+				},
+				{
+					"backtrace" : 2,
+					"define" : "QT_POSITIONINGQUICK_LIB"
+				},
+				{
+					"backtrace" : 2,
+					"define" : "QT_POSITIONING_LIB"
+				},
+				{
+					"backtrace" : 2,
+					"define" : "QT_QMLINTEGRATION_LIB"
+				},
+				{
+					"backtrace" : 2,
+					"define" : "QT_QML_LIB"
+				},
+				{
+					"backtrace" : 2,
+					"define" : "QT_QUICKWIDGETS_LIB"
+				},
+				{
+					"backtrace" : 2,
+					"define" : "QT_QUICK_LIB"
+				},
+				{
+					"backtrace" : 2,
+					"define" : "QT_WIDGETS_LIB"
+				},
+				{
+					"backtrace" : 2,
+					"define" : "UNICODE"
+				},
+				{
+					"backtrace" : 2,
+					"define" : "WIN32"
+				},
+				{
+					"backtrace" : 2,
+					"define" : "WIN64"
+				},
+				{
+					"backtrace" : 2,
+					"define" : "_ENABLE_EXTENDED_ALIGNED_STORAGE"
+				},
+				{
+					"backtrace" : 2,
+					"define" : "_UNICODE"
+				},
+				{
+					"backtrace" : 2,
+					"define" : "_WIN64"
+				}
+			],
+			"includes" : 
+			[
+				{
+					"backtrace" : 0,
+					"path" : "D:/Desktop/project-rawing/platform/111/stroke_sim_qt/build/Desktop_Qt_6_10_2_MinGW_64_bit-Debug/stroke_sim_qt_autogen/include"
+				},
+				{
+					"backtrace" : 51,
+					"path" : "D:/Desktop/project-rawing/platform/111/stroke_sim_qt/../../lib/lvgl"
+				},
+				{
+					"backtrace" : 51,
+					"path" : "D:/Desktop/project-rawing/platform/111/stroke_sim_qt"
+				},
+				{
+					"backtrace" : 51,
+					"path" : "D:/Desktop/project-rawing/platform/111/stroke_sim_qt/ui"
+				},
+				{
+					"backtrace" : 51,
+					"path" : "D:/Desktop/project-rawing/platform/111/stroke_sim_qt/ui/src"
+				},
+				{
+					"backtrace" : 51,
+					"path" : "D:/Desktop/project-rawing/platform/111/stroke_sim_qt/ui/src/components"
+				},
+				{
+					"backtrace" : 51,
+					"path" : "D:/Desktop/project-rawing/platform/111/stroke_sim_qt/ui/src/screens"
+				},
+				{
+					"backtrace" : 51,
+					"path" : "D:/Desktop/project-rawing/platform/111/stroke_sim_qt/ui/src/fonts"
+				},
+				{
+					"backtrace" : 51,
+					"path" : "D:/Desktop/project-rawing/platform/111/stroke_sim_qt/ui/src/images"
+				},
+				{
+					"backtrace" : 51,
+					"path" : "D:/Desktop/project-rawing/platform/111/stroke_sim_qt/../../lib"
+				},
+				{
+					"backtrace" : 2,
+					"isSystem" : true,
+					"path" : "C:/Qt/6.10.2/mingw_64/include/QtCore"
+				},
+				{
+					"backtrace" : 2,
+					"isSystem" : true,
+					"path" : "C:/Qt/6.10.2/mingw_64/include"
+				},
+				{
+					"backtrace" : 2,
+					"isSystem" : true,
+					"path" : "C:/Qt/6.10.2/mingw_64/mkspecs/win32-g++"
+				},
+				{
+					"backtrace" : 2,
+					"isSystem" : true,
+					"path" : "C:/Qt/6.10.2/mingw_64/include/QtWidgets"
+				},
+				{
+					"backtrace" : 2,
+					"isSystem" : true,
+					"path" : "C:/Qt/6.10.2/mingw_64/include/QtGui"
+				},
+				{
+					"backtrace" : 2,
+					"isSystem" : true,
+					"path" : "C:/Qt/6.10.2/mingw_64/include/QtCharts"
+				},
+				{
+					"backtrace" : 2,
+					"isSystem" : true,
+					"path" : "C:/Qt/6.10.2/mingw_64/include/QtOpenGL"
+				},
+				{
+					"backtrace" : 2,
+					"isSystem" : true,
+					"path" : "C:/Qt/6.10.2/mingw_64/include/QtOpenGLWidgets"
+				},
+				{
+					"backtrace" : 2,
+					"isSystem" : true,
+					"path" : "C:/Qt/6.10.2/mingw_64/include/QtQml"
+				},
+				{
+					"backtrace" : 2,
+					"isSystem" : true,
+					"path" : "C:/Qt/6.10.2/mingw_64/include/QtQmlIntegration"
+				},
+				{
+					"backtrace" : 2,
+					"isSystem" : true,
+					"path" : "C:/Qt/6.10.2/mingw_64/include/QtNetwork"
+				},
+				{
+					"backtrace" : 2,
+					"isSystem" : true,
+					"path" : "C:/Qt/6.10.2/mingw_64/include/QtQuick"
+				},
+				{
+					"backtrace" : 2,
+					"isSystem" : true,
+					"path" : "C:/Qt/6.10.2/mingw_64/include/QtQuickWidgets"
+				},
+				{
+					"backtrace" : 2,
+					"isSystem" : true,
+					"path" : "C:/Qt/6.10.2/mingw_64/include/QtLocation"
+				},
+				{
+					"backtrace" : 2,
+					"isSystem" : true,
+					"path" : "C:/Qt/6.10.2/mingw_64/include/QtPositioning"
+				},
+				{
+					"backtrace" : 2,
+					"isSystem" : true,
+					"path" : "C:/Qt/6.10.2/mingw_64/include/QtPositioningQuick"
+				}
+			],
+			"language" : "CXX",
+			"languageStandard" : 
+			{
+				"backtraces" : 
+				[
+					2,
+					2
+				],
+				"standard" : "17"
+			},
+			"sourceIndexes" : 
+			[
+				0,
+				1,
+				3,
+				5,
+				7,
+				9,
+				11,
+				13,
+				15,
+				16,
+				207
+			]
+		},
+		{
+			"defines" : 
+			[
+				{
+					"backtrace" : 49,
+					"define" : "LV_CONF_INCLUDE_SIMPLE"
+				},
+				{
+					"backtrace" : 50,
+					"define" : "LV_CONF_PATH=D:/Desktop/project-rawing/platform/111/stroke_sim_qt/../../lib/lv_conf.h"
+				},
+				{
+					"backtrace" : 2,
+					"define" : "MINGW_HAS_SECURE_API=1"
+				},
+				{
+					"backtrace" : 2,
+					"define" : "QT_CHARTS_LIB"
+				},
+				{
+					"backtrace" : 2,
+					"define" : "QT_CORE_LIB"
+				},
+				{
+					"backtrace" : 2,
+					"define" : "QT_GUI_LIB"
+				},
+				{
+					"backtrace" : 2,
+					"define" : "QT_LOCATION_LIB"
+				},
+				{
+					"backtrace" : 2,
+					"define" : "QT_NETWORK_LIB"
+				},
+				{
+					"backtrace" : 2,
+					"define" : "QT_OPENGLWIDGETS_LIB"
+				},
+				{
+					"backtrace" : 2,
+					"define" : "QT_OPENGL_LIB"
+				},
+				{
+					"backtrace" : 2,
+					"define" : "QT_POSITIONINGQUICK_LIB"
+				},
+				{
+					"backtrace" : 2,
+					"define" : "QT_POSITIONING_LIB"
+				},
+				{
+					"backtrace" : 2,
+					"define" : "QT_QMLINTEGRATION_LIB"
+				},
+				{
+					"backtrace" : 2,
+					"define" : "QT_QML_LIB"
+				},
+				{
+					"backtrace" : 2,
+					"define" : "QT_QUICKWIDGETS_LIB"
+				},
+				{
+					"backtrace" : 2,
+					"define" : "QT_QUICK_LIB"
+				},
+				{
+					"backtrace" : 2,
+					"define" : "QT_WIDGETS_LIB"
+				},
+				{
+					"backtrace" : 2,
+					"define" : "UNICODE"
+				},
+				{
+					"backtrace" : 2,
+					"define" : "WIN32"
+				},
+				{
+					"backtrace" : 2,
+					"define" : "WIN64"
+				},
+				{
+					"backtrace" : 2,
+					"define" : "_ENABLE_EXTENDED_ALIGNED_STORAGE"
+				},
+				{
+					"backtrace" : 2,
+					"define" : "_UNICODE"
+				},
+				{
+					"backtrace" : 2,
+					"define" : "_WIN64"
+				}
+			],
+			"includes" : 
+			[
+				{
+					"backtrace" : 0,
+					"path" : "D:/Desktop/project-rawing/platform/111/stroke_sim_qt/build/Desktop_Qt_6_10_2_MinGW_64_bit-Debug/stroke_sim_qt_autogen/include"
+				},
+				{
+					"backtrace" : 51,
+					"path" : "D:/Desktop/project-rawing/platform/111/stroke_sim_qt/../../lib/lvgl"
+				},
+				{
+					"backtrace" : 51,
+					"path" : "D:/Desktop/project-rawing/platform/111/stroke_sim_qt"
+				},
+				{
+					"backtrace" : 51,
+					"path" : "D:/Desktop/project-rawing/platform/111/stroke_sim_qt/ui"
+				},
+				{
+					"backtrace" : 51,
+					"path" : "D:/Desktop/project-rawing/platform/111/stroke_sim_qt/ui/src"
+				},
+				{
+					"backtrace" : 51,
+					"path" : "D:/Desktop/project-rawing/platform/111/stroke_sim_qt/ui/src/components"
+				},
+				{
+					"backtrace" : 51,
+					"path" : "D:/Desktop/project-rawing/platform/111/stroke_sim_qt/ui/src/screens"
+				},
+				{
+					"backtrace" : 51,
+					"path" : "D:/Desktop/project-rawing/platform/111/stroke_sim_qt/ui/src/fonts"
+				},
+				{
+					"backtrace" : 51,
+					"path" : "D:/Desktop/project-rawing/platform/111/stroke_sim_qt/ui/src/images"
+				},
+				{
+					"backtrace" : 51,
+					"path" : "D:/Desktop/project-rawing/platform/111/stroke_sim_qt/../../lib"
+				},
+				{
+					"backtrace" : 2,
+					"isSystem" : true,
+					"path" : "C:/Qt/6.10.2/mingw_64/include/QtCore"
+				},
+				{
+					"backtrace" : 2,
+					"isSystem" : true,
+					"path" : "C:/Qt/6.10.2/mingw_64/include"
+				},
+				{
+					"backtrace" : 2,
+					"isSystem" : true,
+					"path" : "C:/Qt/6.10.2/mingw_64/mkspecs/win32-g++"
+				},
+				{
+					"backtrace" : 2,
+					"isSystem" : true,
+					"path" : "C:/Qt/6.10.2/mingw_64/include/QtWidgets"
+				},
+				{
+					"backtrace" : 2,
+					"isSystem" : true,
+					"path" : "C:/Qt/6.10.2/mingw_64/include/QtGui"
+				},
+				{
+					"backtrace" : 2,
+					"isSystem" : true,
+					"path" : "C:/Qt/6.10.2/mingw_64/include/QtCharts"
+				},
+				{
+					"backtrace" : 2,
+					"isSystem" : true,
+					"path" : "C:/Qt/6.10.2/mingw_64/include/QtOpenGL"
+				},
+				{
+					"backtrace" : 2,
+					"isSystem" : true,
+					"path" : "C:/Qt/6.10.2/mingw_64/include/QtOpenGLWidgets"
+				},
+				{
+					"backtrace" : 2,
+					"isSystem" : true,
+					"path" : "C:/Qt/6.10.2/mingw_64/include/QtQml"
+				},
+				{
+					"backtrace" : 2,
+					"isSystem" : true,
+					"path" : "C:/Qt/6.10.2/mingw_64/include/QtQmlIntegration"
+				},
+				{
+					"backtrace" : 2,
+					"isSystem" : true,
+					"path" : "C:/Qt/6.10.2/mingw_64/include/QtNetwork"
+				},
+				{
+					"backtrace" : 2,
+					"isSystem" : true,
+					"path" : "C:/Qt/6.10.2/mingw_64/include/QtQuick"
+				},
+				{
+					"backtrace" : 2,
+					"isSystem" : true,
+					"path" : "C:/Qt/6.10.2/mingw_64/include/QtQuickWidgets"
+				},
+				{
+					"backtrace" : 2,
+					"isSystem" : true,
+					"path" : "C:/Qt/6.10.2/mingw_64/include/QtLocation"
+				},
+				{
+					"backtrace" : 2,
+					"isSystem" : true,
+					"path" : "C:/Qt/6.10.2/mingw_64/include/QtPositioning"
+				},
+				{
+					"backtrace" : 2,
+					"isSystem" : true,
+					"path" : "C:/Qt/6.10.2/mingw_64/include/QtPositioningQuick"
+				}
+			],
+			"language" : "RC",
+			"sourceIndexes" : 
+			[
+				18
+			]
+		},
+		{
+			"compileCommandFragments" : 
+			[
+				{
+					"fragment" : "-g -fdiagnostics-color=always"
+				}
+			],
+			"defines" : 
+			[
+				{
+					"backtrace" : 49,
+					"define" : "LV_CONF_INCLUDE_SIMPLE"
+				},
+				{
+					"backtrace" : 50,
+					"define" : "LV_CONF_PATH=D:/Desktop/project-rawing/platform/111/stroke_sim_qt/../../lib/lv_conf.h"
+				},
+				{
+					"backtrace" : 2,
+					"define" : "MINGW_HAS_SECURE_API=1"
+				},
+				{
+					"backtrace" : 2,
+					"define" : "QT_CHARTS_LIB"
+				},
+				{
+					"backtrace" : 2,
+					"define" : "QT_CORE_LIB"
+				},
+				{
+					"backtrace" : 2,
+					"define" : "QT_GUI_LIB"
+				},
+				{
+					"backtrace" : 2,
+					"define" : "QT_LOCATION_LIB"
+				},
+				{
+					"backtrace" : 2,
+					"define" : "QT_NETWORK_LIB"
+				},
+				{
+					"backtrace" : 2,
+					"define" : "QT_OPENGLWIDGETS_LIB"
+				},
+				{
+					"backtrace" : 2,
+					"define" : "QT_OPENGL_LIB"
+				},
+				{
+					"backtrace" : 2,
+					"define" : "QT_POSITIONINGQUICK_LIB"
+				},
+				{
+					"backtrace" : 2,
+					"define" : "QT_POSITIONING_LIB"
+				},
+				{
+					"backtrace" : 2,
+					"define" : "QT_QMLINTEGRATION_LIB"
+				},
+				{
+					"backtrace" : 2,
+					"define" : "QT_QML_LIB"
+				},
+				{
+					"backtrace" : 2,
+					"define" : "QT_QUICKWIDGETS_LIB"
+				},
+				{
+					"backtrace" : 2,
+					"define" : "QT_QUICK_LIB"
+				},
+				{
+					"backtrace" : 2,
+					"define" : "QT_WIDGETS_LIB"
+				},
+				{
+					"backtrace" : 2,
+					"define" : "UNICODE"
+				},
+				{
+					"backtrace" : 2,
+					"define" : "WIN32"
+				},
+				{
+					"backtrace" : 2,
+					"define" : "WIN64"
+				},
+				{
+					"backtrace" : 2,
+					"define" : "_ENABLE_EXTENDED_ALIGNED_STORAGE"
+				},
+				{
+					"backtrace" : 2,
+					"define" : "_UNICODE"
+				},
+				{
+					"backtrace" : 2,
+					"define" : "_WIN64"
+				}
+			],
+			"includes" : 
+			[
+				{
+					"backtrace" : 0,
+					"path" : "D:/Desktop/project-rawing/platform/111/stroke_sim_qt/build/Desktop_Qt_6_10_2_MinGW_64_bit-Debug/stroke_sim_qt_autogen/include"
+				},
+				{
+					"backtrace" : 51,
+					"path" : "D:/Desktop/project-rawing/platform/111/stroke_sim_qt/../../lib/lvgl"
+				},
+				{
+					"backtrace" : 51,
+					"path" : "D:/Desktop/project-rawing/platform/111/stroke_sim_qt"
+				},
+				{
+					"backtrace" : 51,
+					"path" : "D:/Desktop/project-rawing/platform/111/stroke_sim_qt/ui"
+				},
+				{
+					"backtrace" : 51,
+					"path" : "D:/Desktop/project-rawing/platform/111/stroke_sim_qt/ui/src"
+				},
+				{
+					"backtrace" : 51,
+					"path" : "D:/Desktop/project-rawing/platform/111/stroke_sim_qt/ui/src/components"
+				},
+				{
+					"backtrace" : 51,
+					"path" : "D:/Desktop/project-rawing/platform/111/stroke_sim_qt/ui/src/screens"
+				},
+				{
+					"backtrace" : 51,
+					"path" : "D:/Desktop/project-rawing/platform/111/stroke_sim_qt/ui/src/fonts"
+				},
+				{
+					"backtrace" : 51,
+					"path" : "D:/Desktop/project-rawing/platform/111/stroke_sim_qt/ui/src/images"
+				},
+				{
+					"backtrace" : 51,
+					"path" : "D:/Desktop/project-rawing/platform/111/stroke_sim_qt/../../lib"
+				},
+				{
+					"backtrace" : 2,
+					"isSystem" : true,
+					"path" : "C:/Qt/6.10.2/mingw_64/include/QtCore"
+				},
+				{
+					"backtrace" : 2,
+					"isSystem" : true,
+					"path" : "C:/Qt/6.10.2/mingw_64/include"
+				},
+				{
+					"backtrace" : 2,
+					"isSystem" : true,
+					"path" : "C:/Qt/6.10.2/mingw_64/mkspecs/win32-g++"
+				},
+				{
+					"backtrace" : 2,
+					"isSystem" : true,
+					"path" : "C:/Qt/6.10.2/mingw_64/include/QtWidgets"
+				},
+				{
+					"backtrace" : 2,
+					"isSystem" : true,
+					"path" : "C:/Qt/6.10.2/mingw_64/include/QtGui"
+				},
+				{
+					"backtrace" : 2,
+					"isSystem" : true,
+					"path" : "C:/Qt/6.10.2/mingw_64/include/QtCharts"
+				},
+				{
+					"backtrace" : 2,
+					"isSystem" : true,
+					"path" : "C:/Qt/6.10.2/mingw_64/include/QtOpenGL"
+				},
+				{
+					"backtrace" : 2,
+					"isSystem" : true,
+					"path" : "C:/Qt/6.10.2/mingw_64/include/QtOpenGLWidgets"
+				},
+				{
+					"backtrace" : 2,
+					"isSystem" : true,
+					"path" : "C:/Qt/6.10.2/mingw_64/include/QtQml"
+				},
+				{
+					"backtrace" : 2,
+					"isSystem" : true,
+					"path" : "C:/Qt/6.10.2/mingw_64/include/QtQmlIntegration"
+				},
+				{
+					"backtrace" : 2,
+					"isSystem" : true,
+					"path" : "C:/Qt/6.10.2/mingw_64/include/QtNetwork"
+				},
+				{
+					"backtrace" : 2,
+					"isSystem" : true,
+					"path" : "C:/Qt/6.10.2/mingw_64/include/QtQuick"
+				},
+				{
+					"backtrace" : 2,
+					"isSystem" : true,
+					"path" : "C:/Qt/6.10.2/mingw_64/include/QtQuickWidgets"
+				},
+				{
+					"backtrace" : 2,
+					"isSystem" : true,
+					"path" : "C:/Qt/6.10.2/mingw_64/include/QtLocation"
+				},
+				{
+					"backtrace" : 2,
+					"isSystem" : true,
+					"path" : "C:/Qt/6.10.2/mingw_64/include/QtPositioning"
+				},
+				{
+					"backtrace" : 2,
+					"isSystem" : true,
+					"path" : "C:/Qt/6.10.2/mingw_64/include/QtPositioningQuick"
+				}
+			],
+			"language" : "C",
+			"sourceIndexes" : 
+			[
+				19,
+				20,
+				21,
+				22,
+				23,
+				24,
+				25,
+				26,
+				27,
+				28,
+				29,
+				30,
+				31,
+				32,
+				33,
+				34,
+				35,
+				36,
+				37,
+				38,
+				39,
+				40,
+				41,
+				42,
+				43,
+				44,
+				45,
+				46,
+				47,
+				48,
+				49,
+				50,
+				51,
+				52,
+				53,
+				54,
+				55,
+				56,
+				57,
+				58,
+				59,
+				60,
+				61,
+				62,
+				63,
+				64,
+				65,
+				66,
+				67,
+				68,
+				69,
+				70,
+				71,
+				72,
+				73,
+				74,
+				75,
+				76,
+				77,
+				78,
+				79,
+				80,
+				81,
+				82,
+				83,
+				84,
+				85,
+				86,
+				87,
+				88,
+				89,
+				90,
+				91,
+				92,
+				93,
+				94,
+				95,
+				96,
+				97,
+				98,
+				99,
+				100,
+				101,
+				102,
+				103,
+				104,
+				105,
+				106,
+				107,
+				108,
+				109,
+				110,
+				111,
+				112,
+				113,
+				114,
+				115,
+				116,
+				117,
+				118,
+				119,
+				120,
+				121,
+				122,
+				123,
+				124,
+				125,
+				126,
+				127,
+				128,
+				129,
+				130,
+				131,
+				132,
+				133,
+				134,
+				135,
+				136,
+				137,
+				138,
+				139,
+				140,
+				141,
+				142,
+				143,
+				144,
+				145,
+				146,
+				147,
+				148,
+				149,
+				150,
+				151,
+				152,
+				153,
+				154,
+				155,
+				156,
+				157,
+				158,
+				159,
+				160,
+				161,
+				162,
+				163,
+				164,
+				165,
+				166,
+				167,
+				168,
+				169,
+				170,
+				171,
+				172,
+				173,
+				174,
+				175,
+				176,
+				177,
+				178,
+				179,
+				180,
+				181,
+				182,
+				183,
+				184,
+				185,
+				186,
+				187,
+				188,
+				189,
+				190,
+				191,
+				192,
+				193,
+				194,
+				195,
+				196,
+				197,
+				198,
+				199,
+				200,
+				201,
+				202,
+				203,
+				204,
+				205
+			]
+		}
+	],
+	"dependencies" : 
+	[
+		{
+			"id" : "stroke_sim_qt_autogen_timestamp_deps::@6890427a1f51a3e7e1df"
+		},
+		{
+			"backtrace" : 0,
+			"id" : "stroke_sim_qt_autogen::@6890427a1f51a3e7e1df"
+		}
+	],
+	"id" : "stroke_sim_qt::@6890427a1f51a3e7e1df",
+	"link" : 
+	{
+		"commandFragments" : 
+		[
+			{
+				"fragment" : "-DQT_QML_DEBUG -g",
+				"role" : "flags"
+			},
+			{
+				"fragment" : "",
+				"role" : "flags"
+			},
+			{
+				"backtrace" : 2,
+				"fragment" : "C:\\Qt\\6.10.2\\mingw_64\\lib\\libQt6Charts.a",
+				"role" : "libraries"
+			},
+			{
+				"backtrace" : 2,
+				"fragment" : "C:\\Qt\\6.10.2\\mingw_64\\lib\\libQt6QuickWidgets.a",
+				"role" : "libraries"
+			},
+			{
+				"backtrace" : 2,
+				"fragment" : "C:\\Qt\\6.10.2\\mingw_64\\lib\\libQt6Location.a",
+				"role" : "libraries"
+			},
+			{
+				"backtrace" : 8,
+				"fragment" : "C:\\Qt\\6.10.2\\mingw_64\\lib\\libQt6OpenGLWidgets.a",
+				"role" : "libraries"
+			},
+			{
+				"backtrace" : 2,
+				"fragment" : "C:\\Qt\\6.10.2\\mingw_64\\lib\\libQt6Widgets.a",
+				"role" : "libraries"
+			},
+			{
+				"backtrace" : 13,
+				"fragment" : "C:\\Qt\\6.10.2\\mingw_64\\lib\\libQt6PositioningQuick.a",
+				"role" : "libraries"
+			},
+			{
+				"backtrace" : 2,
+				"fragment" : "C:\\Qt\\6.10.2\\mingw_64\\lib\\libQt6Quick.a",
+				"role" : "libraries"
+			},
+			{
+				"backtrace" : 8,
+				"fragment" : "C:\\Qt\\6.10.2\\mingw_64\\lib\\libQt6OpenGL.a",
+				"role" : "libraries"
+			},
+			{
+				"backtrace" : 18,
+				"fragment" : "C:\\Qt\\6.10.2\\mingw_64\\lib\\libQt6Gui.a",
+				"role" : "libraries"
+			},
+			{
+				"backtrace" : 28,
+				"fragment" : "-ld3d11",
+				"role" : "libraries"
+			},
+			{
+				"backtrace" : 28,
+				"fragment" : "-ldxgi",
+				"role" : "libraries"
+			},
+			{
+				"backtrace" : 28,
+				"fragment" : "-ldxguid",
+				"role" : "libraries"
+			},
+			{
+				"backtrace" : 28,
+				"fragment" : "-ld3d12",
+				"role" : "libraries"
+			},
+			{
+				"backtrace" : 8,
+				"fragment" : "-luser32",
+				"role" : "libraries"
+			},
+			{
+				"backtrace" : 2,
+				"fragment" : "C:\\Qt\\6.10.2\\mingw_64\\lib\\libQt6Qml.a",
+				"role" : "libraries"
+			},
+			{
+				"backtrace" : 33,
+				"fragment" : "C:\\Qt\\6.10.2\\mingw_64\\lib\\libQt6Network.a",
+				"role" : "libraries"
+			},
+			{
+				"backtrace" : 43,
+				"fragment" : "-lws2_32",
+				"role" : "libraries"
+			},
+			{
+				"backtrace" : 33,
+				"fragment" : "-lshell32",
+				"role" : "libraries"
+			},
+			{
+				"backtrace" : 2,
+				"fragment" : "C:\\Qt\\6.10.2\\mingw_64\\lib\\libQt6Positioning.a",
+				"role" : "libraries"
+			},
+			{
+				"backtrace" : 2,
+				"fragment" : "C:\\Qt\\6.10.2\\mingw_64\\lib\\libQt6Core.a",
+				"role" : "libraries"
+			},
+			{
+				"backtrace" : 48,
+				"fragment" : "-lmpr",
+				"role" : "libraries"
+			},
+			{
+				"backtrace" : 48,
+				"fragment" : "-luserenv",
+				"role" : "libraries"
+			},
+			{
+				"fragment" : "-lkernel32 -luser32 -lgdi32 -lwinspool -lshell32 -lole32 -loleaut32 -luuid -lcomdlg32 -ladvapi32",
+				"role" : "libraries"
+			}
+		],
+		"language" : "CXX"
+	},
+	"name" : "stroke_sim_qt",
+	"nameOnDisk" : "stroke_sim_qt.exe",
+	"paths" : 
+	{
+		"build" : ".",
+		"source" : "."
+	},
+	"sourceGroups" : 
+	[
+		{
+			"name" : "Source Files",
+			"sourceIndexes" : 
+			[
+				0,
+				1,
+				3,
+				5,
+				7,
+				9,
+				11,
+				13,
+				15,
+				16,
+				18,
+				19,
+				20,
+				21,
+				22,
+				23,
+				24,
+				25,
+				26,
+				27,
+				28,
+				29,
+				30,
+				31,
+				32,
+				33,
+				34,
+				35,
+				36,
+				37,
+				38,
+				39,
+				40,
+				41,
+				42,
+				43,
+				44,
+				45,
+				46,
+				47,
+				48,
+				49,
+				50,
+				51,
+				52,
+				53,
+				54,
+				55,
+				56,
+				57,
+				58,
+				59,
+				60,
+				61,
+				62,
+				63,
+				64,
+				65,
+				66,
+				67,
+				68,
+				69,
+				70,
+				71,
+				72,
+				73,
+				74,
+				75,
+				76,
+				77,
+				78,
+				79,
+				80,
+				81,
+				82,
+				83,
+				84,
+				85,
+				86,
+				87,
+				88,
+				89,
+				90,
+				91,
+				92,
+				93,
+				94,
+				95,
+				96,
+				97,
+				98,
+				99,
+				100,
+				101,
+				102,
+				103,
+				104,
+				105,
+				106,
+				107,
+				108,
+				109,
+				110,
+				111,
+				112,
+				113,
+				114,
+				115,
+				116,
+				117,
+				118,
+				119,
+				120,
+				121,
+				122,
+				123,
+				124,
+				125,
+				126,
+				127,
+				128,
+				129,
+				130,
+				131,
+				132,
+				133,
+				134,
+				135,
+				136,
+				137,
+				138,
+				139,
+				140,
+				141,
+				142,
+				143,
+				144,
+				145,
+				146,
+				147,
+				148,
+				149,
+				150,
+				151,
+				152,
+				153,
+				154,
+				155,
+				156,
+				157,
+				158,
+				159,
+				160,
+				161,
+				162,
+				163,
+				164,
+				165,
+				166,
+				167,
+				168,
+				169,
+				170,
+				171,
+				172,
+				173,
+				174,
+				175,
+				176,
+				177,
+				178,
+				179,
+				180,
+				181,
+				182,
+				183,
+				184,
+				185,
+				186,
+				187,
+				188,
+				189,
+				190,
+				191,
+				192,
+				193,
+				194,
+				195,
+				196,
+				197,
+				198,
+				199,
+				200,
+				201,
+				202,
+				203,
+				204,
+				205,
+				207
+			]
+		},
+		{
+			"name" : "Header Files",
+			"sourceIndexes" : 
+			[
+				2,
+				4,
+				6,
+				8,
+				10,
+				12,
+				14
+			]
+		},
+		{
+			"name" : "Resources",
+			"sourceIndexes" : 
+			[
+				17
+			]
+		},
+		{
+			"name" : "",
+			"sourceIndexes" : 
+			[
+				206
+			]
+		},
+		{
+			"name" : "CMake Rules",
+			"sourceIndexes" : 
+			[
+				208,
+				209
+			]
+		}
+	],
+	"sources" : 
+	[
+		{
+			"backtrace" : 0,
+			"compileGroupIndex" : 0,
+			"isGenerated" : true,
+			"path" : "build/Desktop_Qt_6_10_2_MinGW_64_bit-Debug/stroke_sim_qt_autogen/mocs_compilation.cpp",
+			"sourceGroupIndex" : 0
+		},
+		{
+			"backtrace" : 1,
+			"compileGroupIndex" : 0,
+			"path" : "main.cpp",
+			"sourceGroupIndex" : 0
+		},
+		{
+			"backtrace" : 1,
+			"path" : "mainwindow.h",
+			"sourceGroupIndex" : 1
+		},
+		{
+			"backtrace" : 1,
+			"compileGroupIndex" : 0,
+			"path" : "mainwindow.cpp",
+			"sourceGroupIndex" : 0
+		},
+		{
+			"backtrace" : 1,
+			"path" : "stroke_detector.h",
+			"sourceGroupIndex" : 1
+		},
+		{
+			"backtrace" : 1,
+			"compileGroupIndex" : 0,
+			"path" : "stroke_detector.cpp",
+			"sourceGroupIndex" : 0
+		},
+		{
+			"backtrace" : 1,
+			"path" : "csv_loader.h",
+			"sourceGroupIndex" : 1
+		},
+		{
+			"backtrace" : 1,
+			"compileGroupIndex" : 0,
+			"path" : "csv_loader.cpp",
+			"sourceGroupIndex" : 0
+		},
+		{
+			"backtrace" : 1,
+			"path" : "simulation_worker.h",
+			"sourceGroupIndex" : 1
+		},
+		{
+			"backtrace" : 1,
+			"compileGroupIndex" : 0,
+			"path" : "simulation_worker.cpp",
+			"sourceGroupIndex" : 0
+		},
+		{
+			"backtrace" : 1,
+			"path" : "chart_view.h",
+			"sourceGroupIndex" : 1
+		},
+		{
+			"backtrace" : 1,
+			"compileGroupIndex" : 0,
+			"path" : "chart_view.cpp",
+			"sourceGroupIndex" : 0
+		},
+		{
+			"backtrace" : 1,
+			"path" : "lvgl_widget.h",
+			"sourceGroupIndex" : 1
+		},
+		{
+			"backtrace" : 1,
+			"compileGroupIndex" : 0,
+			"path" : "lvgl_widget.cpp",
+			"sourceGroupIndex" : 0
+		},
+		{
+			"backtrace" : 1,
+			"path" : "training_mode.h",
+			"sourceGroupIndex" : 1
+		},
+		{
+			"backtrace" : 1,
+			"compileGroupIndex" : 0,
+			"path" : "training_mode.cpp",
+			"sourceGroupIndex" : 0
+		},
+		{
+			"backtrace" : 1,
+			"compileGroupIndex" : 0,
+			"path" : "GNSSProcessor.cpp",
+			"sourceGroupIndex" : 0
+		},
+		{
+			"backtrace" : 1,
+			"path" : "resources.qrc",
+			"sourceGroupIndex" : 2
+		},
+		{
+			"backtrace" : 1,
+			"compileGroupIndex" : 1,
+			"path" : "app_icon.rc",
+			"sourceGroupIndex" : 0
+		},
+		{
+			"backtrace" : 1,
+			"compileGroupIndex" : 2,
+			"path" : "D:/Desktop/project-rawing/platform/lib/lvgl/src/core/lv_disp.c",
+			"sourceGroupIndex" : 0
+		},
+		{
+			"backtrace" : 1,
+			"compileGroupIndex" : 2,
+			"path" : "D:/Desktop/project-rawing/platform/lib/lvgl/src/core/lv_event.c",
+			"sourceGroupIndex" : 0
+		},
+		{
+			"backtrace" : 1,
+			"compileGroupIndex" : 2,
+			"path" : "D:/Desktop/project-rawing/platform/lib/lvgl/src/core/lv_group.c",
+			"sourceGroupIndex" : 0
+		},
+		{
+			"backtrace" : 1,
+			"compileGroupIndex" : 2,
+			"path" : "D:/Desktop/project-rawing/platform/lib/lvgl/src/core/lv_indev.c",
+			"sourceGroupIndex" : 0
+		},
+		{
+			"backtrace" : 1,
+			"compileGroupIndex" : 2,
+			"path" : "D:/Desktop/project-rawing/platform/lib/lvgl/src/core/lv_indev_scroll.c",
+			"sourceGroupIndex" : 0
+		},
+		{
+			"backtrace" : 1,
+			"compileGroupIndex" : 2,
+			"path" : "D:/Desktop/project-rawing/platform/lib/lvgl/src/core/lv_obj.c",
+			"sourceGroupIndex" : 0
+		},
+		{
+			"backtrace" : 1,
+			"compileGroupIndex" : 2,
+			"path" : "D:/Desktop/project-rawing/platform/lib/lvgl/src/core/lv_obj_class.c",
+			"sourceGroupIndex" : 0
+		},
+		{
+			"backtrace" : 1,
+			"compileGroupIndex" : 2,
+			"path" : "D:/Desktop/project-rawing/platform/lib/lvgl/src/core/lv_obj_draw.c",
+			"sourceGroupIndex" : 0
+		},
+		{
+			"backtrace" : 1,
+			"compileGroupIndex" : 2,
+			"path" : "D:/Desktop/project-rawing/platform/lib/lvgl/src/core/lv_obj_pos.c",
+			"sourceGroupIndex" : 0
+		},
+		{
+			"backtrace" : 1,
+			"compileGroupIndex" : 2,
+			"path" : "D:/Desktop/project-rawing/platform/lib/lvgl/src/core/lv_obj_scroll.c",
+			"sourceGroupIndex" : 0
+		},
+		{
+			"backtrace" : 1,
+			"compileGroupIndex" : 2,
+			"path" : "D:/Desktop/project-rawing/platform/lib/lvgl/src/core/lv_obj_style.c",
+			"sourceGroupIndex" : 0
+		},
+		{
+			"backtrace" : 1,
+			"compileGroupIndex" : 2,
+			"path" : "D:/Desktop/project-rawing/platform/lib/lvgl/src/core/lv_obj_style_gen.c",
+			"sourceGroupIndex" : 0
+		},
+		{
+			"backtrace" : 1,
+			"compileGroupIndex" : 2,
+			"path" : "D:/Desktop/project-rawing/platform/lib/lvgl/src/core/lv_obj_tree.c",
+			"sourceGroupIndex" : 0
+		},
+		{
+			"backtrace" : 1,
+			"compileGroupIndex" : 2,
+			"path" : "D:/Desktop/project-rawing/platform/lib/lvgl/src/core/lv_refr.c",
+			"sourceGroupIndex" : 0
+		},
+		{
+			"backtrace" : 1,
+			"compileGroupIndex" : 2,
+			"path" : "D:/Desktop/project-rawing/platform/lib/lvgl/src/core/lv_theme.c",
+			"sourceGroupIndex" : 0
+		},
+		{
+			"backtrace" : 1,
+			"compileGroupIndex" : 2,
+			"path" : "D:/Desktop/project-rawing/platform/lib/lvgl/src/draw/lv_draw.c",
+			"sourceGroupIndex" : 0
+		},
+		{
+			"backtrace" : 1,
+			"compileGroupIndex" : 2,
+			"path" : "D:/Desktop/project-rawing/platform/lib/lvgl/src/draw/lv_draw_arc.c",
+			"sourceGroupIndex" : 0
+		},
+		{
+			"backtrace" : 1,
+			"compileGroupIndex" : 2,
+			"path" : "D:/Desktop/project-rawing/platform/lib/lvgl/src/draw/lv_draw_img.c",
+			"sourceGroupIndex" : 0
+		},
+		{
+			"backtrace" : 1,
+			"compileGroupIndex" : 2,
+			"path" : "D:/Desktop/project-rawing/platform/lib/lvgl/src/draw/lv_draw_label.c",
+			"sourceGroupIndex" : 0
+		},
+		{
+			"backtrace" : 1,
+			"compileGroupIndex" : 2,
+			"path" : "D:/Desktop/project-rawing/platform/lib/lvgl/src/draw/lv_draw_layer.c",
+			"sourceGroupIndex" : 0
+		},
+		{
+			"backtrace" : 1,
+			"compileGroupIndex" : 2,
+			"path" : "D:/Desktop/project-rawing/platform/lib/lvgl/src/draw/lv_draw_line.c",
+			"sourceGroupIndex" : 0
+		},
+		{
+			"backtrace" : 1,
+			"compileGroupIndex" : 2,
+			"path" : "D:/Desktop/project-rawing/platform/lib/lvgl/src/draw/lv_draw_mask.c",
+			"sourceGroupIndex" : 0
+		},
+		{
+			"backtrace" : 1,
+			"compileGroupIndex" : 2,
+			"path" : "D:/Desktop/project-rawing/platform/lib/lvgl/src/draw/lv_draw_rect.c",
+			"sourceGroupIndex" : 0
+		},
+		{
+			"backtrace" : 1,
+			"compileGroupIndex" : 2,
+			"path" : "D:/Desktop/project-rawing/platform/lib/lvgl/src/draw/lv_draw_transform.c",
+			"sourceGroupIndex" : 0
+		},
+		{
+			"backtrace" : 1,
+			"compileGroupIndex" : 2,
+			"path" : "D:/Desktop/project-rawing/platform/lib/lvgl/src/draw/lv_draw_triangle.c",
+			"sourceGroupIndex" : 0
+		},
+		{
+			"backtrace" : 1,
+			"compileGroupIndex" : 2,
+			"path" : "D:/Desktop/project-rawing/platform/lib/lvgl/src/draw/lv_img_buf.c",
+			"sourceGroupIndex" : 0
+		},
+		{
+			"backtrace" : 1,
+			"compileGroupIndex" : 2,
+			"path" : "D:/Desktop/project-rawing/platform/lib/lvgl/src/draw/lv_img_cache.c",
+			"sourceGroupIndex" : 0
+		},
+		{
+			"backtrace" : 1,
+			"compileGroupIndex" : 2,
+			"path" : "D:/Desktop/project-rawing/platform/lib/lvgl/src/draw/lv_img_decoder.c",
+			"sourceGroupIndex" : 0
+		},
+		{
+			"backtrace" : 1,
+			"compileGroupIndex" : 2,
+			"path" : "D:/Desktop/project-rawing/platform/lib/lvgl/src/draw/sw/lv_draw_sw.c",
+			"sourceGroupIndex" : 0
+		},
+		{
+			"backtrace" : 1,
+			"compileGroupIndex" : 2,
+			"path" : "D:/Desktop/project-rawing/platform/lib/lvgl/src/draw/sw/lv_draw_sw_arc.c",
+			"sourceGroupIndex" : 0
+		},
+		{
+			"backtrace" : 1,
+			"compileGroupIndex" : 2,
+			"path" : "D:/Desktop/project-rawing/platform/lib/lvgl/src/draw/sw/lv_draw_sw_blend.c",
+			"sourceGroupIndex" : 0
+		},
+		{
+			"backtrace" : 1,
+			"compileGroupIndex" : 2,
+			"path" : "D:/Desktop/project-rawing/platform/lib/lvgl/src/draw/sw/lv_draw_sw_dither.c",
+			"sourceGroupIndex" : 0
+		},
+		{
+			"backtrace" : 1,
+			"compileGroupIndex" : 2,
+			"path" : "D:/Desktop/project-rawing/platform/lib/lvgl/src/draw/sw/lv_draw_sw_gradient.c",
+			"sourceGroupIndex" : 0
+		},
+		{
+			"backtrace" : 1,
+			"compileGroupIndex" : 2,
+			"path" : "D:/Desktop/project-rawing/platform/lib/lvgl/src/draw/sw/lv_draw_sw_img.c",
+			"sourceGroupIndex" : 0
+		},
+		{
+			"backtrace" : 1,
+			"compileGroupIndex" : 2,
+			"path" : "D:/Desktop/project-rawing/platform/lib/lvgl/src/draw/sw/lv_draw_sw_layer.c",
+			"sourceGroupIndex" : 0
+		},
+		{
+			"backtrace" : 1,
+			"compileGroupIndex" : 2,
+			"path" : "D:/Desktop/project-rawing/platform/lib/lvgl/src/draw/sw/lv_draw_sw_letter.c",
+			"sourceGroupIndex" : 0
+		},
+		{
+			"backtrace" : 1,
+			"compileGroupIndex" : 2,
+			"path" : "D:/Desktop/project-rawing/platform/lib/lvgl/src/draw/sw/lv_draw_sw_line.c",
+			"sourceGroupIndex" : 0
+		},
+		{
+			"backtrace" : 1,
+			"compileGroupIndex" : 2,
+			"path" : "D:/Desktop/project-rawing/platform/lib/lvgl/src/draw/sw/lv_draw_sw_polygon.c",
+			"sourceGroupIndex" : 0
+		},
+		{
+			"backtrace" : 1,
+			"compileGroupIndex" : 2,
+			"path" : "D:/Desktop/project-rawing/platform/lib/lvgl/src/draw/sw/lv_draw_sw_rect.c",
+			"sourceGroupIndex" : 0
+		},
+		{
+			"backtrace" : 1,
+			"compileGroupIndex" : 2,
+			"path" : "D:/Desktop/project-rawing/platform/lib/lvgl/src/draw/sw/lv_draw_sw_transform.c",
+			"sourceGroupIndex" : 0
+		},
+		{
+			"backtrace" : 1,
+			"compileGroupIndex" : 2,
+			"path" : "D:/Desktop/project-rawing/platform/lib/lvgl/src/extra/layouts/flex/lv_flex.c",
+			"sourceGroupIndex" : 0
+		},
+		{
+			"backtrace" : 1,
+			"compileGroupIndex" : 2,
+			"path" : "D:/Desktop/project-rawing/platform/lib/lvgl/src/extra/layouts/grid/lv_grid.c",
+			"sourceGroupIndex" : 0
+		},
+		{
+			"backtrace" : 1,
+			"compileGroupIndex" : 2,
+			"path" : "D:/Desktop/project-rawing/platform/lib/lvgl/src/extra/libs/bmp/lv_bmp.c",
+			"sourceGroupIndex" : 0
+		},
+		{
+			"backtrace" : 1,
+			"compileGroupIndex" : 2,
+			"path" : "D:/Desktop/project-rawing/platform/lib/lvgl/src/extra/libs/ffmpeg/lv_ffmpeg.c",
+			"sourceGroupIndex" : 0
+		},
+		{
+			"backtrace" : 1,
+			"compileGroupIndex" : 2,
+			"path" : "D:/Desktop/project-rawing/platform/lib/lvgl/src/extra/libs/freetype/lv_freetype.c",
+			"sourceGroupIndex" : 0
+		},
+		{
+			"backtrace" : 1,
+			"compileGroupIndex" : 2,
+			"path" : "D:/Desktop/project-rawing/platform/lib/lvgl/src/extra/libs/fsdrv/lv_fs_fatfs.c",
+			"sourceGroupIndex" : 0
+		},
+		{
+			"backtrace" : 1,
+			"compileGroupIndex" : 2,
+			"path" : "D:/Desktop/project-rawing/platform/lib/lvgl/src/extra/libs/fsdrv/lv_fs_littlefs.c",
+			"sourceGroupIndex" : 0
+		},
+		{
+			"backtrace" : 1,
+			"compileGroupIndex" : 2,
+			"path" : "D:/Desktop/project-rawing/platform/lib/lvgl/src/extra/libs/fsdrv/lv_fs_posix.c",
+			"sourceGroupIndex" : 0
+		},
+		{
+			"backtrace" : 1,
+			"compileGroupIndex" : 2,
+			"path" : "D:/Desktop/project-rawing/platform/lib/lvgl/src/extra/libs/fsdrv/lv_fs_stdio.c",
+			"sourceGroupIndex" : 0
+		},
+		{
+			"backtrace" : 1,
+			"compileGroupIndex" : 2,
+			"path" : "D:/Desktop/project-rawing/platform/lib/lvgl/src/extra/libs/fsdrv/lv_fs_win32.c",
+			"sourceGroupIndex" : 0
+		},
+		{
+			"backtrace" : 1,
+			"compileGroupIndex" : 2,
+			"path" : "D:/Desktop/project-rawing/platform/lib/lvgl/src/extra/libs/gif/gifdec.c",
+			"sourceGroupIndex" : 0
+		},
+		{
+			"backtrace" : 1,
+			"compileGroupIndex" : 2,
+			"path" : "D:/Desktop/project-rawing/platform/lib/lvgl/src/extra/libs/gif/lv_gif.c",
+			"sourceGroupIndex" : 0
+		},
+		{
+			"backtrace" : 1,
+			"compileGroupIndex" : 2,
+			"path" : "D:/Desktop/project-rawing/platform/lib/lvgl/src/extra/libs/png/lodepng.c",
+			"sourceGroupIndex" : 0
+		},
+		{
+			"backtrace" : 1,
+			"compileGroupIndex" : 2,
+			"path" : "D:/Desktop/project-rawing/platform/lib/lvgl/src/extra/libs/png/lv_png.c",
+			"sourceGroupIndex" : 0
+		},
+		{
+			"backtrace" : 1,
+			"compileGroupIndex" : 2,
+			"path" : "D:/Desktop/project-rawing/platform/lib/lvgl/src/extra/libs/qrcode/lv_qrcode.c",
+			"sourceGroupIndex" : 0
+		},
+		{
+			"backtrace" : 1,
+			"compileGroupIndex" : 2,
+			"path" : "D:/Desktop/project-rawing/platform/lib/lvgl/src/extra/libs/qrcode/qrcodegen.c",
+			"sourceGroupIndex" : 0
+		},
+		{
+			"backtrace" : 1,
+			"compileGroupIndex" : 2,
+			"path" : "D:/Desktop/project-rawing/platform/lib/lvgl/src/extra/libs/rlottie/lv_rlottie.c",
+			"sourceGroupIndex" : 0
+		},
+		{
+			"backtrace" : 1,
+			"compileGroupIndex" : 2,
+			"path" : "D:/Desktop/project-rawing/platform/lib/lvgl/src/extra/libs/sjpg/lv_sjpg.c",
+			"sourceGroupIndex" : 0
+		},
+		{
+			"backtrace" : 1,
+			"compileGroupIndex" : 2,
+			"path" : "D:/Desktop/project-rawing/platform/lib/lvgl/src/extra/libs/sjpg/tjpgd.c",
+			"sourceGroupIndex" : 0
+		},
+		{
+			"backtrace" : 1,
+			"compileGroupIndex" : 2,
+			"path" : "D:/Desktop/project-rawing/platform/lib/lvgl/src/extra/libs/tiny_ttf/lv_tiny_ttf.c",
+			"sourceGroupIndex" : 0
+		},
+		{
+			"backtrace" : 1,
+			"compileGroupIndex" : 2,
+			"path" : "D:/Desktop/project-rawing/platform/lib/lvgl/src/extra/lv_extra.c",
+			"sourceGroupIndex" : 0
+		},
+		{
+			"backtrace" : 1,
+			"compileGroupIndex" : 2,
+			"path" : "D:/Desktop/project-rawing/platform/lib/lvgl/src/extra/others/fragment/lv_fragment.c",
+			"sourceGroupIndex" : 0
+		},
+		{
+			"backtrace" : 1,
+			"compileGroupIndex" : 2,
+			"path" : "D:/Desktop/project-rawing/platform/lib/lvgl/src/extra/others/fragment/lv_fragment_manager.c",
+			"sourceGroupIndex" : 0
+		},
+		{
+			"backtrace" : 1,
+			"compileGroupIndex" : 2,
+			"path" : "D:/Desktop/project-rawing/platform/lib/lvgl/src/extra/others/gridnav/lv_gridnav.c",
+			"sourceGroupIndex" : 0
+		},
+		{
+			"backtrace" : 1,
+			"compileGroupIndex" : 2,
+			"path" : "D:/Desktop/project-rawing/platform/lib/lvgl/src/extra/others/ime/lv_ime_pinyin.c",
+			"sourceGroupIndex" : 0
+		},
+		{
+			"backtrace" : 1,
+			"compileGroupIndex" : 2,
+			"path" : "D:/Desktop/project-rawing/platform/lib/lvgl/src/extra/others/imgfont/lv_imgfont.c",
+			"sourceGroupIndex" : 0
+		},
+		{
+			"backtrace" : 1,
+			"compileGroupIndex" : 2,
+			"path" : "D:/Desktop/project-rawing/platform/lib/lvgl/src/extra/others/monkey/lv_monkey.c",
+			"sourceGroupIndex" : 0
+		},
+		{
+			"backtrace" : 1,
+			"compileGroupIndex" : 2,
+			"path" : "D:/Desktop/project-rawing/platform/lib/lvgl/src/extra/others/msg/lv_msg.c",
+			"sourceGroupIndex" : 0
+		},
+		{
+			"backtrace" : 1,
+			"compileGroupIndex" : 2,
+			"path" : "D:/Desktop/project-rawing/platform/lib/lvgl/src/extra/others/snapshot/lv_snapshot.c",
+			"sourceGroupIndex" : 0
+		},
+		{
+			"backtrace" : 1,
+			"compileGroupIndex" : 2,
+			"path" : "D:/Desktop/project-rawing/platform/lib/lvgl/src/extra/themes/basic/lv_theme_basic.c",
+			"sourceGroupIndex" : 0
+		},
+		{
+			"backtrace" : 1,
+			"compileGroupIndex" : 2,
+			"path" : "D:/Desktop/project-rawing/platform/lib/lvgl/src/extra/themes/default/lv_theme_default.c",
+			"sourceGroupIndex" : 0
+		},
+		{
+			"backtrace" : 1,
+			"compileGroupIndex" : 2,
+			"path" : "D:/Desktop/project-rawing/platform/lib/lvgl/src/extra/themes/mono/lv_theme_mono.c",
+			"sourceGroupIndex" : 0
+		},
+		{
+			"backtrace" : 1,
+			"compileGroupIndex" : 2,
+			"path" : "D:/Desktop/project-rawing/platform/lib/lvgl/src/extra/widgets/animimg/lv_animimg.c",
+			"sourceGroupIndex" : 0
+		},
+		{
+			"backtrace" : 1,
+			"compileGroupIndex" : 2,
+			"path" : "D:/Desktop/project-rawing/platform/lib/lvgl/src/extra/widgets/calendar/lv_calendar.c",
+			"sourceGroupIndex" : 0
+		},
+		{
+			"backtrace" : 1,
+			"compileGroupIndex" : 2,
+			"path" : "D:/Desktop/project-rawing/platform/lib/lvgl/src/extra/widgets/calendar/lv_calendar_header_arrow.c",
+			"sourceGroupIndex" : 0
+		},
+		{
+			"backtrace" : 1,
+			"compileGroupIndex" : 2,
+			"path" : "D:/Desktop/project-rawing/platform/lib/lvgl/src/extra/widgets/calendar/lv_calendar_header_dropdown.c",
+			"sourceGroupIndex" : 0
+		},
+		{
+			"backtrace" : 1,
+			"compileGroupIndex" : 2,
+			"path" : "D:/Desktop/project-rawing/platform/lib/lvgl/src/extra/widgets/chart/lv_chart.c",
+			"sourceGroupIndex" : 0
+		},
+		{
+			"backtrace" : 1,
+			"compileGroupIndex" : 2,
+			"path" : "D:/Desktop/project-rawing/platform/lib/lvgl/src/extra/widgets/colorwheel/lv_colorwheel.c",
+			"sourceGroupIndex" : 0
+		},
+		{
+			"backtrace" : 1,
+			"compileGroupIndex" : 2,
+			"path" : "D:/Desktop/project-rawing/platform/lib/lvgl/src/extra/widgets/imgbtn/lv_imgbtn.c",
+			"sourceGroupIndex" : 0
+		},
+		{
+			"backtrace" : 1,
+			"compileGroupIndex" : 2,
+			"path" : "D:/Desktop/project-rawing/platform/lib/lvgl/src/extra/widgets/keyboard/lv_keyboard.c",
+			"sourceGroupIndex" : 0
+		},
+		{
+			"backtrace" : 1,
+			"compileGroupIndex" : 2,
+			"path" : "D:/Desktop/project-rawing/platform/lib/lvgl/src/extra/widgets/led/lv_led.c",
+			"sourceGroupIndex" : 0
+		},
+		{
+			"backtrace" : 1,
+			"compileGroupIndex" : 2,
+			"path" : "D:/Desktop/project-rawing/platform/lib/lvgl/src/extra/widgets/list/lv_list.c",
+			"sourceGroupIndex" : 0
+		},
+		{
+			"backtrace" : 1,
+			"compileGroupIndex" : 2,
+			"path" : "D:/Desktop/project-rawing/platform/lib/lvgl/src/extra/widgets/menu/lv_menu.c",
+			"sourceGroupIndex" : 0
+		},
+		{
+			"backtrace" : 1,
+			"compileGroupIndex" : 2,
+			"path" : "D:/Desktop/project-rawing/platform/lib/lvgl/src/extra/widgets/meter/lv_meter.c",
+			"sourceGroupIndex" : 0
+		},
+		{
+			"backtrace" : 1,
+			"compileGroupIndex" : 2,
+			"path" : "D:/Desktop/project-rawing/platform/lib/lvgl/src/extra/widgets/msgbox/lv_msgbox.c",
+			"sourceGroupIndex" : 0
+		},
+		{
+			"backtrace" : 1,
+			"compileGroupIndex" : 2,
+			"path" : "D:/Desktop/project-rawing/platform/lib/lvgl/src/extra/widgets/span/lv_span.c",
+			"sourceGroupIndex" : 0
+		},
+		{
+			"backtrace" : 1,
+			"compileGroupIndex" : 2,
+			"path" : "D:/Desktop/project-rawing/platform/lib/lvgl/src/extra/widgets/spinbox/lv_spinbox.c",
+			"sourceGroupIndex" : 0
+		},
+		{
+			"backtrace" : 1,
+			"compileGroupIndex" : 2,
+			"path" : "D:/Desktop/project-rawing/platform/lib/lvgl/src/extra/widgets/spinner/lv_spinner.c",
+			"sourceGroupIndex" : 0
+		},
+		{
+			"backtrace" : 1,
+			"compileGroupIndex" : 2,
+			"path" : "D:/Desktop/project-rawing/platform/lib/lvgl/src/extra/widgets/tabview/lv_tabview.c",
+			"sourceGroupIndex" : 0
+		},
+		{
+			"backtrace" : 1,
+			"compileGroupIndex" : 2,
+			"path" : "D:/Desktop/project-rawing/platform/lib/lvgl/src/extra/widgets/tileview/lv_tileview.c",
+			"sourceGroupIndex" : 0
+		},
+		{
+			"backtrace" : 1,
+			"compileGroupIndex" : 2,
+			"path" : "D:/Desktop/project-rawing/platform/lib/lvgl/src/extra/widgets/win/lv_win.c",
+			"sourceGroupIndex" : 0
+		},
+		{
+			"backtrace" : 1,
+			"compileGroupIndex" : 2,
+			"path" : "D:/Desktop/project-rawing/platform/lib/lvgl/src/font/lv_font.c",
+			"sourceGroupIndex" : 0
+		},
+		{
+			"backtrace" : 1,
+			"compileGroupIndex" : 2,
+			"path" : "D:/Desktop/project-rawing/platform/lib/lvgl/src/font/lv_font_dejavu_16_persian_hebrew.c",
+			"sourceGroupIndex" : 0
+		},
+		{
+			"backtrace" : 1,
+			"compileGroupIndex" : 2,
+			"path" : "D:/Desktop/project-rawing/platform/lib/lvgl/src/font/lv_font_fmt_txt.c",
+			"sourceGroupIndex" : 0
+		},
+		{
+			"backtrace" : 1,
+			"compileGroupIndex" : 2,
+			"path" : "D:/Desktop/project-rawing/platform/lib/lvgl/src/font/lv_font_loader.c",
+			"sourceGroupIndex" : 0
+		},
+		{
+			"backtrace" : 1,
+			"compileGroupIndex" : 2,
+			"path" : "D:/Desktop/project-rawing/platform/lib/lvgl/src/font/lv_font_montserrat_10.c",
+			"sourceGroupIndex" : 0
+		},
+		{
+			"backtrace" : 1,
+			"compileGroupIndex" : 2,
+			"path" : "D:/Desktop/project-rawing/platform/lib/lvgl/src/font/lv_font_montserrat_12.c",
+			"sourceGroupIndex" : 0
+		},
+		{
+			"backtrace" : 1,
+			"compileGroupIndex" : 2,
+			"path" : "D:/Desktop/project-rawing/platform/lib/lvgl/src/font/lv_font_montserrat_12_subpx.c",
+			"sourceGroupIndex" : 0
+		},
+		{
+			"backtrace" : 1,
+			"compileGroupIndex" : 2,
+			"path" : "D:/Desktop/project-rawing/platform/lib/lvgl/src/font/lv_font_montserrat_14.c",
+			"sourceGroupIndex" : 0
+		},
+		{
+			"backtrace" : 1,
+			"compileGroupIndex" : 2,
+			"path" : "D:/Desktop/project-rawing/platform/lib/lvgl/src/font/lv_font_montserrat_16.c",
+			"sourceGroupIndex" : 0
+		},
+		{
+			"backtrace" : 1,
+			"compileGroupIndex" : 2,
+			"path" : "D:/Desktop/project-rawing/platform/lib/lvgl/src/font/lv_font_montserrat_18.c",
+			"sourceGroupIndex" : 0
+		},
+		{
+			"backtrace" : 1,
+			"compileGroupIndex" : 2,
+			"path" : "D:/Desktop/project-rawing/platform/lib/lvgl/src/font/lv_font_montserrat_20.c",
+			"sourceGroupIndex" : 0
+		},
+		{
+			"backtrace" : 1,
+			"compileGroupIndex" : 2,
+			"path" : "D:/Desktop/project-rawing/platform/lib/lvgl/src/font/lv_font_montserrat_22.c",
+			"sourceGroupIndex" : 0
+		},
+		{
+			"backtrace" : 1,
+			"compileGroupIndex" : 2,
+			"path" : "D:/Desktop/project-rawing/platform/lib/lvgl/src/font/lv_font_montserrat_24.c",
+			"sourceGroupIndex" : 0
+		},
+		{
+			"backtrace" : 1,
+			"compileGroupIndex" : 2,
+			"path" : "D:/Desktop/project-rawing/platform/lib/lvgl/src/font/lv_font_montserrat_26.c",
+			"sourceGroupIndex" : 0
+		},
+		{
+			"backtrace" : 1,
+			"compileGroupIndex" : 2,
+			"path" : "D:/Desktop/project-rawing/platform/lib/lvgl/src/font/lv_font_montserrat_28.c",
+			"sourceGroupIndex" : 0
+		},
+		{
+			"backtrace" : 1,
+			"compileGroupIndex" : 2,
+			"path" : "D:/Desktop/project-rawing/platform/lib/lvgl/src/font/lv_font_montserrat_28_compressed.c",
+			"sourceGroupIndex" : 0
+		},
+		{
+			"backtrace" : 1,
+			"compileGroupIndex" : 2,
+			"path" : "D:/Desktop/project-rawing/platform/lib/lvgl/src/font/lv_font_montserrat_30.c",
+			"sourceGroupIndex" : 0
+		},
+		{
+			"backtrace" : 1,
+			"compileGroupIndex" : 2,
+			"path" : "D:/Desktop/project-rawing/platform/lib/lvgl/src/font/lv_font_montserrat_32.c",
+			"sourceGroupIndex" : 0
+		},
+		{
+			"backtrace" : 1,
+			"compileGroupIndex" : 2,
+			"path" : "D:/Desktop/project-rawing/platform/lib/lvgl/src/font/lv_font_montserrat_34.c",
+			"sourceGroupIndex" : 0
+		},
+		{
+			"backtrace" : 1,
+			"compileGroupIndex" : 2,
+			"path" : "D:/Desktop/project-rawing/platform/lib/lvgl/src/font/lv_font_montserrat_36.c",
+			"sourceGroupIndex" : 0
+		},
+		{
+			"backtrace" : 1,
+			"compileGroupIndex" : 2,
+			"path" : "D:/Desktop/project-rawing/platform/lib/lvgl/src/font/lv_font_montserrat_38.c",
+			"sourceGroupIndex" : 0
+		},
+		{
+			"backtrace" : 1,
+			"compileGroupIndex" : 2,
+			"path" : "D:/Desktop/project-rawing/platform/lib/lvgl/src/font/lv_font_montserrat_40.c",
+			"sourceGroupIndex" : 0
+		},
+		{
+			"backtrace" : 1,
+			"compileGroupIndex" : 2,
+			"path" : "D:/Desktop/project-rawing/platform/lib/lvgl/src/font/lv_font_montserrat_42.c",
+			"sourceGroupIndex" : 0
+		},
+		{
+			"backtrace" : 1,
+			"compileGroupIndex" : 2,
+			"path" : "D:/Desktop/project-rawing/platform/lib/lvgl/src/font/lv_font_montserrat_44.c",
+			"sourceGroupIndex" : 0
+		},
+		{
+			"backtrace" : 1,
+			"compileGroupIndex" : 2,
+			"path" : "D:/Desktop/project-rawing/platform/lib/lvgl/src/font/lv_font_montserrat_46.c",
+			"sourceGroupIndex" : 0
+		},
+		{
+			"backtrace" : 1,
+			"compileGroupIndex" : 2,
+			"path" : "D:/Desktop/project-rawing/platform/lib/lvgl/src/font/lv_font_montserrat_48.c",
+			"sourceGroupIndex" : 0
+		},
+		{
+			"backtrace" : 1,
+			"compileGroupIndex" : 2,
+			"path" : "D:/Desktop/project-rawing/platform/lib/lvgl/src/font/lv_font_montserrat_8.c",
+			"sourceGroupIndex" : 0
+		},
+		{
+			"backtrace" : 1,
+			"compileGroupIndex" : 2,
+			"path" : "D:/Desktop/project-rawing/platform/lib/lvgl/src/font/lv_font_simsun_16_cjk.c",
+			"sourceGroupIndex" : 0
+		},
+		{
+			"backtrace" : 1,
+			"compileGroupIndex" : 2,
+			"path" : "D:/Desktop/project-rawing/platform/lib/lvgl/src/font/lv_font_unscii_16.c",
+			"sourceGroupIndex" : 0
+		},
+		{
+			"backtrace" : 1,
+			"compileGroupIndex" : 2,
+			"path" : "D:/Desktop/project-rawing/platform/lib/lvgl/src/font/lv_font_unscii_8.c",
+			"sourceGroupIndex" : 0
+		},
+		{
+			"backtrace" : 1,
+			"compileGroupIndex" : 2,
+			"path" : "D:/Desktop/project-rawing/platform/lib/lvgl/src/hal/lv_hal_disp.c",
+			"sourceGroupIndex" : 0
+		},
+		{
+			"backtrace" : 1,
+			"compileGroupIndex" : 2,
+			"path" : "D:/Desktop/project-rawing/platform/lib/lvgl/src/hal/lv_hal_indev.c",
+			"sourceGroupIndex" : 0
+		},
+		{
+			"backtrace" : 1,
+			"compileGroupIndex" : 2,
+			"path" : "D:/Desktop/project-rawing/platform/lib/lvgl/src/hal/lv_hal_tick.c",
+			"sourceGroupIndex" : 0
+		},
+		{
+			"backtrace" : 1,
+			"compileGroupIndex" : 2,
+			"path" : "D:/Desktop/project-rawing/platform/lib/lvgl/src/misc/lv_anim.c",
+			"sourceGroupIndex" : 0
+		},
+		{
+			"backtrace" : 1,
+			"compileGroupIndex" : 2,
+			"path" : "D:/Desktop/project-rawing/platform/lib/lvgl/src/misc/lv_anim_timeline.c",
+			"sourceGroupIndex" : 0
+		},
+		{
+			"backtrace" : 1,
+			"compileGroupIndex" : 2,
+			"path" : "D:/Desktop/project-rawing/platform/lib/lvgl/src/misc/lv_area.c",
+			"sourceGroupIndex" : 0
+		},
+		{
+			"backtrace" : 1,
+			"compileGroupIndex" : 2,
+			"path" : "D:/Desktop/project-rawing/platform/lib/lvgl/src/misc/lv_async.c",
+			"sourceGroupIndex" : 0
+		},
+		{
+			"backtrace" : 1,
+			"compileGroupIndex" : 2,
+			"path" : "D:/Desktop/project-rawing/platform/lib/lvgl/src/misc/lv_bidi.c",
+			"sourceGroupIndex" : 0
+		},
+		{
+			"backtrace" : 1,
+			"compileGroupIndex" : 2,
+			"path" : "D:/Desktop/project-rawing/platform/lib/lvgl/src/misc/lv_color.c",
+			"sourceGroupIndex" : 0
+		},
+		{
+			"backtrace" : 1,
+			"compileGroupIndex" : 2,
+			"path" : "D:/Desktop/project-rawing/platform/lib/lvgl/src/misc/lv_fs.c",
+			"sourceGroupIndex" : 0
+		},
+		{
+			"backtrace" : 1,
+			"compileGroupIndex" : 2,
+			"path" : "D:/Desktop/project-rawing/platform/lib/lvgl/src/misc/lv_gc.c",
+			"sourceGroupIndex" : 0
+		},
+		{
+			"backtrace" : 1,
+			"compileGroupIndex" : 2,
+			"path" : "D:/Desktop/project-rawing/platform/lib/lvgl/src/misc/lv_ll.c",
+			"sourceGroupIndex" : 0
+		},
+		{
+			"backtrace" : 1,
+			"compileGroupIndex" : 2,
+			"path" : "D:/Desktop/project-rawing/platform/lib/lvgl/src/misc/lv_log.c",
+			"sourceGroupIndex" : 0
+		},
+		{
+			"backtrace" : 1,
+			"compileGroupIndex" : 2,
+			"path" : "D:/Desktop/project-rawing/platform/lib/lvgl/src/misc/lv_lru.c",
+			"sourceGroupIndex" : 0
+		},
+		{
+			"backtrace" : 1,
+			"compileGroupIndex" : 2,
+			"path" : "D:/Desktop/project-rawing/platform/lib/lvgl/src/misc/lv_math.c",
+			"sourceGroupIndex" : 0
+		},
+		{
+			"backtrace" : 1,
+			"compileGroupIndex" : 2,
+			"path" : "D:/Desktop/project-rawing/platform/lib/lvgl/src/misc/lv_mem.c",
+			"sourceGroupIndex" : 0
+		},
+		{
+			"backtrace" : 1,
+			"compileGroupIndex" : 2,
+			"path" : "D:/Desktop/project-rawing/platform/lib/lvgl/src/misc/lv_printf.c",
+			"sourceGroupIndex" : 0
+		},
+		{
+			"backtrace" : 1,
+			"compileGroupIndex" : 2,
+			"path" : "D:/Desktop/project-rawing/platform/lib/lvgl/src/misc/lv_style.c",
+			"sourceGroupIndex" : 0
+		},
+		{
+			"backtrace" : 1,
+			"compileGroupIndex" : 2,
+			"path" : "D:/Desktop/project-rawing/platform/lib/lvgl/src/misc/lv_style_gen.c",
+			"sourceGroupIndex" : 0
+		},
+		{
+			"backtrace" : 1,
+			"compileGroupIndex" : 2,
+			"path" : "D:/Desktop/project-rawing/platform/lib/lvgl/src/misc/lv_templ.c",
+			"sourceGroupIndex" : 0
+		},
+		{
+			"backtrace" : 1,
+			"compileGroupIndex" : 2,
+			"path" : "D:/Desktop/project-rawing/platform/lib/lvgl/src/misc/lv_timer.c",
+			"sourceGroupIndex" : 0
+		},
+		{
+			"backtrace" : 1,
+			"compileGroupIndex" : 2,
+			"path" : "D:/Desktop/project-rawing/platform/lib/lvgl/src/misc/lv_tlsf.c",
+			"sourceGroupIndex" : 0
+		},
+		{
+			"backtrace" : 1,
+			"compileGroupIndex" : 2,
+			"path" : "D:/Desktop/project-rawing/platform/lib/lvgl/src/misc/lv_txt.c",
+			"sourceGroupIndex" : 0
+		},
+		{
+			"backtrace" : 1,
+			"compileGroupIndex" : 2,
+			"path" : "D:/Desktop/project-rawing/platform/lib/lvgl/src/misc/lv_txt_ap.c",
+			"sourceGroupIndex" : 0
+		},
+		{
+			"backtrace" : 1,
+			"compileGroupIndex" : 2,
+			"path" : "D:/Desktop/project-rawing/platform/lib/lvgl/src/misc/lv_utils.c",
+			"sourceGroupIndex" : 0
+		},
+		{
+			"backtrace" : 1,
+			"compileGroupIndex" : 2,
+			"path" : "D:/Desktop/project-rawing/platform/lib/lvgl/src/widgets/lv_arc.c",
+			"sourceGroupIndex" : 0
+		},
+		{
+			"backtrace" : 1,
+			"compileGroupIndex" : 2,
+			"path" : "D:/Desktop/project-rawing/platform/lib/lvgl/src/widgets/lv_bar.c",
+			"sourceGroupIndex" : 0
+		},
+		{
+			"backtrace" : 1,
+			"compileGroupIndex" : 2,
+			"path" : "D:/Desktop/project-rawing/platform/lib/lvgl/src/widgets/lv_btn.c",
+			"sourceGroupIndex" : 0
+		},
+		{
+			"backtrace" : 1,
+			"compileGroupIndex" : 2,
+			"path" : "D:/Desktop/project-rawing/platform/lib/lvgl/src/widgets/lv_btnmatrix.c",
+			"sourceGroupIndex" : 0
+		},
+		{
+			"backtrace" : 1,
+			"compileGroupIndex" : 2,
+			"path" : "D:/Desktop/project-rawing/platform/lib/lvgl/src/widgets/lv_canvas.c",
+			"sourceGroupIndex" : 0
+		},
+		{
+			"backtrace" : 1,
+			"compileGroupIndex" : 2,
+			"path" : "D:/Desktop/project-rawing/platform/lib/lvgl/src/widgets/lv_checkbox.c",
+			"sourceGroupIndex" : 0
+		},
+		{
+			"backtrace" : 1,
+			"compileGroupIndex" : 2,
+			"path" : "D:/Desktop/project-rawing/platform/lib/lvgl/src/widgets/lv_dropdown.c",
+			"sourceGroupIndex" : 0
+		},
+		{
+			"backtrace" : 1,
+			"compileGroupIndex" : 2,
+			"path" : "D:/Desktop/project-rawing/platform/lib/lvgl/src/widgets/lv_img.c",
+			"sourceGroupIndex" : 0
+		},
+		{
+			"backtrace" : 1,
+			"compileGroupIndex" : 2,
+			"path" : "D:/Desktop/project-rawing/platform/lib/lvgl/src/widgets/lv_label.c",
+			"sourceGroupIndex" : 0
+		},
+		{
+			"backtrace" : 1,
+			"compileGroupIndex" : 2,
+			"path" : "D:/Desktop/project-rawing/platform/lib/lvgl/src/widgets/lv_line.c",
+			"sourceGroupIndex" : 0
+		},
+		{
+			"backtrace" : 1,
+			"compileGroupIndex" : 2,
+			"path" : "D:/Desktop/project-rawing/platform/lib/lvgl/src/widgets/lv_objx_templ.c",
+			"sourceGroupIndex" : 0
+		},
+		{
+			"backtrace" : 1,
+			"compileGroupIndex" : 2,
+			"path" : "D:/Desktop/project-rawing/platform/lib/lvgl/src/widgets/lv_roller.c",
+			"sourceGroupIndex" : 0
+		},
+		{
+			"backtrace" : 1,
+			"compileGroupIndex" : 2,
+			"path" : "D:/Desktop/project-rawing/platform/lib/lvgl/src/widgets/lv_slider.c",
+			"sourceGroupIndex" : 0
+		},
+		{
+			"backtrace" : 1,
+			"compileGroupIndex" : 2,
+			"path" : "D:/Desktop/project-rawing/platform/lib/lvgl/src/widgets/lv_switch.c",
+			"sourceGroupIndex" : 0
+		},
+		{
+			"backtrace" : 1,
+			"compileGroupIndex" : 2,
+			"path" : "D:/Desktop/project-rawing/platform/lib/lvgl/src/widgets/lv_table.c",
+			"sourceGroupIndex" : 0
+		},
+		{
+			"backtrace" : 1,
+			"compileGroupIndex" : 2,
+			"path" : "D:/Desktop/project-rawing/platform/lib/lvgl/src/widgets/lv_textarea.c",
+			"sourceGroupIndex" : 0
+		},
+		{
+			"backtrace" : 1,
+			"compileGroupIndex" : 2,
+			"path" : "ui/src/components/ui_comp.c",
+			"sourceGroupIndex" : 0
+		},
+		{
+			"backtrace" : 1,
+			"compileGroupIndex" : 2,
+			"path" : "ui/src/components/ui_comp_button2.c",
+			"sourceGroupIndex" : 0
+		},
+		{
+			"backtrace" : 1,
+			"compileGroupIndex" : 2,
+			"path" : "ui/src/components/ui_comp_button3.c",
+			"sourceGroupIndex" : 0
+		},
+		{
+			"backtrace" : 1,
+			"compileGroupIndex" : 2,
+			"path" : "ui/src/components/ui_comp_hook.c",
+			"sourceGroupIndex" : 0
+		},
+		{
+			"backtrace" : 1,
+			"compileGroupIndex" : 2,
+			"path" : "ui/src/components/ui_comp_panel4.c",
+			"sourceGroupIndex" : 0
+		},
+		{
+			"backtrace" : 1,
+			"compileGroupIndex" : 2,
+			"path" : "ui/src/fonts/ui_font_Fon13.c",
+			"sourceGroupIndex" : 0
+		},
+		{
+			"backtrace" : 1,
+			"compileGroupIndex" : 2,
+			"path" : "ui/src/fonts/ui_font_Font17.c",
+			"sourceGroupIndex" : 0
+		},
+		{
+			"backtrace" : 1,
+			"compileGroupIndex" : 2,
+			"path" : "ui/src/fonts/ui_font_Font18.c",
+			"sourceGroupIndex" : 0
+		},
+		{
+			"backtrace" : 1,
+			"compileGroupIndex" : 2,
+			"path" : "ui/src/fonts/ui_font_Font20.c",
+			"sourceGroupIndex" : 0
+		},
+		{
+			"backtrace" : 1,
+			"compileGroupIndex" : 2,
+			"path" : "ui/src/fonts/ui_font_Font22.c",
+			"sourceGroupIndex" : 0
+		},
+		{
+			"backtrace" : 1,
+			"compileGroupIndex" : 2,
+			"path" : "ui/src/fonts/ui_font_Font23.c",
+			"sourceGroupIndex" : 0
+		},
+		{
+			"backtrace" : 1,
+			"compileGroupIndex" : 2,
+			"path" : "ui/src/fonts/ui_font_Font24.c",
+			"sourceGroupIndex" : 0
+		},
+		{
+			"backtrace" : 1,
+			"compileGroupIndex" : 2,
+			"path" : "ui/src/fonts/ui_font_Font50.c",
+			"sourceGroupIndex" : 0
+		},
+		{
+			"backtrace" : 1,
+			"compileGroupIndex" : 2,
+			"path" : "ui/src/images/ui_img_2127489813.c",
+			"sourceGroupIndex" : 0
+		},
+		{
+			"backtrace" : 1,
+			"compileGroupIndex" : 2,
+			"path" : "ui/src/images/ui_img_798663736.c",
+			"sourceGroupIndex" : 0
+		},
+		{
+			"backtrace" : 1,
+			"compileGroupIndex" : 2,
+			"path" : "ui/src/images/ui_img_ble1_png.c",
+			"sourceGroupIndex" : 0
+		},
+		{
+			"backtrace" : 1,
+			"compileGroupIndex" : 2,
+			"path" : "ui/src/images/ui_img_jieli1_png.c",
+			"sourceGroupIndex" : 0
+		},
+		{
+			"backtrace" : 1,
+			"compileGroupIndex" : 2,
+			"path" : "ui/src/images/ui_img_satellite2_png.c",
+			"sourceGroupIndex" : 0
+		},
+		{
+			"backtrace" : 1,
+			"compileGroupIndex" : 2,
+			"path" : "ui/src/images/ui_img_stopwatch_png.c",
+			"sourceGroupIndex" : 0
+		},
+		{
+			"backtrace" : 1,
+			"compileGroupIndex" : 2,
+			"path" : "ui/src/screens/ui_Screen1.c",
+			"sourceGroupIndex" : 0
+		},
+		{
+			"backtrace" : 1,
+			"compileGroupIndex" : 2,
+			"path" : "ui/src/screens/ui_Screen2.c",
+			"sourceGroupIndex" : 0
+		},
+		{
+			"backtrace" : 1,
+			"compileGroupIndex" : 2,
+			"path" : "ui/src/screens/ui_Screen3.c",
+			"sourceGroupIndex" : 0
+		},
+		{
+			"backtrace" : 1,
+			"compileGroupIndex" : 2,
+			"path" : "ui/src/screens/ui_Screen4.c",
+			"sourceGroupIndex" : 0
+		},
+		{
+			"backtrace" : 1,
+			"compileGroupIndex" : 2,
+			"path" : "ui/src/ui.c",
+			"sourceGroupIndex" : 0
+		},
+		{
+			"backtrace" : 1,
+			"compileGroupIndex" : 2,
+			"path" : "ui/src/ui_helpers.c",
+			"sourceGroupIndex" : 0
+		},
+		{
+			"backtrace" : 0,
+			"isGenerated" : true,
+			"path" : "build/Desktop_Qt_6_10_2_MinGW_64_bit-Debug/stroke_sim_qt_autogen/timestamp",
+			"sourceGroupIndex" : 3
+		},
+		{
+			"backtrace" : 0,
+			"compileGroupIndex" : 0,
+			"isGenerated" : true,
+			"path" : "build/Desktop_Qt_6_10_2_MinGW_64_bit-Debug/stroke_sim_qt_autogen/EWIEGA46WW/qrc_resources.cpp",
+			"sourceGroupIndex" : 0
+		},
+		{
+			"backtrace" : 0,
+			"isGenerated" : true,
+			"path" : "build/Desktop_Qt_6_10_2_MinGW_64_bit-Debug/stroke_sim_qt_autogen/timestamp.rule",
+			"sourceGroupIndex" : 4
+		},
+		{
+			"backtrace" : 0,
+			"isGenerated" : true,
+			"path" : "build/Desktop_Qt_6_10_2_MinGW_64_bit-Debug/stroke_sim_qt_autogen/EWIEGA46WW/qrc_resources.cpp.rule",
+			"sourceGroupIndex" : 4
+		}
+	],
+	"type" : "EXECUTABLE"
+}

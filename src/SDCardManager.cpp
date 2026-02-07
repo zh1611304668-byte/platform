@@ -61,7 +61,7 @@ bool SDCardManager::begin() {
   }
   if (imuQueue && !imuTaskHandle) {
     BaseType_t res = xTaskCreatePinnedToCore(imuLogTask, "IMU_SD_Writer",
-                                             4096, this, 0, &imuTaskHandle, 1);
+                                             8192, this, 1, &imuTaskHandle, 1);
     if (res != pdPASS) {
       Serial.println("[SD] ⚠️ 创建IMU写入任务失败，保持同步写入模式");
       imuTaskHandle = nullptr;
@@ -92,7 +92,9 @@ void SDCardManager::logImuData(unsigned long timestamp, float ax, float ay,
   // 异步路径：快速入队，队列满时直接丢弃，绝不阻塞主循环
   if (imuLoggingEnabled && imuQueue) {
     ImuSample sample{(uint32_t)timestamp, ax, ay, az};
-    xQueueSend(imuQueue, &sample, 0); // ignore failure on full
+    if (xQueueSend(imuQueue, &sample, 0) != pdTRUE) {
+      imuDropCount++;
+    }
     return;
   }
 
@@ -535,10 +537,11 @@ void SDCardManager::logDebug(const String &msg) {
 // ===================== IMU 异步写入任务 =====================
 void SDCardManager::imuLogTask(void *param) {
   SDCardManager *self = static_cast<SDCardManager *>(param);
-  char buffer[2048];
+  static char buffer[2048];
   int bufLen = 0;
   int batchCount = 0;
   TickType_t lastFlush = xTaskGetTickCount();
+  TickType_t lastDropPrint = lastFlush;
 
   while (true) {
     ImuSample sample;
@@ -578,6 +581,15 @@ void SDCardManager::imuLogTask(void *param) {
       bufLen = 0;
       batchCount = 0;
       lastFlush = xTaskGetTickCount();
+    }
+
+    if ((xTaskGetTickCount() - lastDropPrint) >= pdMS_TO_TICKS(10000)) {
+      if (self->imuDropCount > 0) {
+        Serial.printf("[SD] IMU dropped samples: %lu (last 10s)\n",
+                      (unsigned long)self->imuDropCount);
+        self->imuDropCount = 0;
+      }
+      lastDropPrint = xTaskGetTickCount();
     }
   }
 }

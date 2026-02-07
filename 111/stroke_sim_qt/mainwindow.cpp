@@ -18,6 +18,10 @@
 #include <QQmlError>
 #include <QStackedLayout>
 #include <QFrame>
+#include <QFile>
+#include <QTextStream>
+#include <QGraphicsTextItem>
+#include <QFont>
 
 #include <algorithm>
 #include <cmath>
@@ -87,6 +91,8 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
           &MainWindow::updateUi);
   connect(worker_, &SimulationWorker::gnssUpdated, this,
           &MainWindow::onGnssUpdated);
+  connect(worker_, &SimulationWorker::timeSyncUpdated, this,
+          &MainWindow::onTimeSyncUpdated);
   connect(worker_, &SimulationWorker::simTimeUpdated, this,
           &MainWindow::onSimTimeUpdated);
   connect(worker_, &SimulationWorker::strokeDetected, this,
@@ -381,6 +387,20 @@ void MainWindow::buildUi() {
   debug_group->setLayout(debug_grid);
   stats_layout->addWidget(debug_group);
 
+  // Time sync group
+  auto *time_group = new QGroupBox("时间对齐");
+  auto *time_form = new QFormLayout();
+  time_base_label_ = new QLabel("--");
+  gnss_offset_label_ = new QLabel("--");
+  imu_jitter_label_ = new QLabel("--");
+  gnss_jitter_label_ = new QLabel("--");
+  time_form->addRow("IMU 基准(ms):", time_base_label_);
+  time_form->addRow("GNSS 偏移(sys-nmea):", gnss_offset_label_);
+  time_form->addRow("IMU 周期/jitter:", imu_jitter_label_);
+  time_form->addRow("GNSS 周期/jitter:", gnss_jitter_label_);
+  time_group->setLayout(time_form);
+  stats_layout->addWidget(time_group);
+
   stats_group->setLayout(stats_layout);
   sidebar_layout->addWidget(stats_group);
 
@@ -531,6 +551,12 @@ void MainWindow::setupChart() {
   chart_view_->setXAxis(x_axis_);
   chart_view_->setYAxis(y_axis_);
 
+  // Keep peak labels aligned when axes change (pan/zoom)
+  connect(x_axis_, &QValueAxis::rangeChanged, this,
+          [this](qreal, qreal) { updatePeakLabels(last_time_offset_); });
+  connect(y_axis_, &QValueAxis::rangeChanged, this,
+          [this](qreal, qreal) { updatePeakLabels(last_time_offset_); });
+
   // Disable auto-tracking when user drags the chart
   connect(chart_view_, &ChartView::userDragged, this, [this]() {
     if (auto_track_cb_->isChecked()) {
@@ -632,6 +658,49 @@ void MainWindow::addMapPoint(double lat, double lon) {
   }
 }
 
+void MainWindow::setMapInitialCenterFromGnss(const QString &path) {
+  if (!map_view_) {
+    return;
+  }
+  QFile file(path);
+  if (!file.open(QIODevice::ReadOnly | QIODevice::Text)) {
+    return;
+  }
+
+  GNSSProcessor parser;
+  QTextStream in(&file);
+  while (!in.atEnd()) {
+    QString line = in.readLine().trimmed();
+    if (line.isEmpty() || !line.contains('$')) {
+      continue;
+    }
+
+    QString nmea = line;
+    int firstComma = line.indexOf(',');
+    if (firstComma > 0) {
+      int secondComma = line.indexOf(',', firstComma + 1);
+      if (secondComma > 0 && secondComma + 1 < line.size()) {
+        nmea = line.mid(secondComma + 1);
+      }
+    }
+
+    if (!nmea.startsWith('$')) {
+      continue;
+    }
+    parser.processNMEA(nmea, 0);
+    const double lat = parser.getLatitude();
+    const double lon = parser.getLongitude();
+    if ((lat != 0.0 || lon != 0.0) && parser.isValidFix()) {
+      if (QObject *root = map_view_->rootObject()) {
+        QMetaObject::invokeMethod(root, "setInitialCenter",
+                                  Q_ARG(QVariant, lat),
+                                  Q_ARG(QVariant, lon));
+      }
+      break;
+    }
+  }
+}
+
 void MainWindow::resetSimulation() {
   if (worker_) {
     worker_->stop();
@@ -665,6 +734,10 @@ void MainWindow::resetSimulation() {
   last_gnss_lat_ = 0.0;
   last_gnss_lon_ = 0.0;
   gnss_has_fix_ = false;
+  if (time_base_label_) time_base_label_->setText("--");
+  if (gnss_offset_label_) gnss_offset_label_->setText("--");
+  if (imu_jitter_label_) imu_jitter_label_->setText("--");
+  if (gnss_jitter_label_) gnss_jitter_label_->setText("--");
   // 重置仿真线程时间轴
   if (worker_) {
     worker_->load_gnss_data(QString()); // 清空GNSS缓存
@@ -680,6 +753,7 @@ void MainWindow::resetSimulation() {
   peak_threshold_line_->clear();
   recovery_upper_line_->clear();
   recovery_lower_line_->clear();
+  clearPeakLabels();
 
   if (!data_.timestamps_ms.empty()) {
     worker_->load_data(data_);
@@ -903,6 +977,7 @@ void MainWindow::updateChart() {
 
   const size_t n = std::min(axis_data->size(), time_data->size());
   const double time_offset = (*time_data)[0];
+  last_time_offset_ = time_offset;
   QVector<QPointF> points;
   points.reserve(static_cast<int>(n));
   for (size_t i = 0; i < n; ++i) {
@@ -941,6 +1016,7 @@ void MainWindow::updateChart() {
   }
   peak_scatter_->replace(peak_points);
   trough_scatter_->replace(trough_points);
+  updatePeakLabels(time_offset);
 
   if (auto_tracking_) {
     double latest = max_x;
@@ -1208,6 +1284,106 @@ void MainWindow::onGnssUpdated(double speed_mps, double lat, double lon,
   }
 }
 
+void MainWindow::addPeakLabel(const StrokeEvent &event) {
+  if (!chart_ || !chart_->scene()) {
+    return;
+  }
+  if (event.latitude == 0.0 && event.longitude == 0.0) {
+    return;
+  }
+
+  PeakLabel label;
+  label.peak_time = event.peak_time;
+  label.peak_value = event.peak_filtered;
+  label.text = QString::number(event.latitude, 'f', 6) + "\n" +
+               QString::number(event.longitude, 'f', 6);
+
+  auto *item = new QGraphicsTextItem(label.text);
+  QFont font = item->font();
+  font.setPointSize(8);
+  item->setFont(font);
+  item->setDefaultTextColor(QColor(0, 0, 0));
+  item->setZValue(10);
+  chart_->scene()->addItem(item);
+  label.item = item;
+  peak_labels_.push_back(label);
+
+  const int kMaxLabels = 80;
+  if (static_cast<int>(peak_labels_.size()) > kMaxLabels) {
+    auto &old = peak_labels_.front();
+    if (old.item) {
+      chart_->scene()->removeItem(old.item);
+      delete old.item;
+    }
+    peak_labels_.erase(peak_labels_.begin());
+  }
+}
+
+void MainWindow::updatePeakLabels(double time_offset) {
+  if (!chart_) {
+    return;
+  }
+  for (auto &label : peak_labels_) {
+    if (!label.item) {
+      continue;
+    }
+    const double x = label.peak_time - time_offset;
+    const double y = label.peak_value;
+    QPointF pos = chart_->mapToPosition(QPointF(x, y), signal_series_);
+    label.item->setPos(pos + QPointF(6.0, -14.0));
+  }
+}
+
+void MainWindow::clearPeakLabels() {
+  if (!chart_ || !chart_->scene()) {
+    peak_labels_.clear();
+    return;
+  }
+  for (auto &label : peak_labels_) {
+    if (label.item) {
+      chart_->scene()->removeItem(label.item);
+      delete label.item;
+    }
+  }
+  peak_labels_.clear();
+}
+
+void MainWindow::onTimeSyncUpdated(double base_time_ms, double gnss_offset_ms,
+                                   double imu_mean_dt, double imu_min_dt,
+                                   double imu_max_dt, double imu_std_dt,
+                                   double gnss_mean_dt, double gnss_min_dt,
+                                   double gnss_max_dt, double gnss_std_dt) {
+  if (time_base_label_) {
+    time_base_label_->setText(QString::number(static_cast<qint64>(base_time_ms)));
+  }
+  if (gnss_offset_label_) {
+    if (std::isnan(gnss_offset_ms)) {
+      gnss_offset_label_->setText("--");
+    } else {
+      gnss_offset_label_->setText(QString::number(gnss_offset_ms, 'f', 1) + " ms");
+    }
+  }
+
+  auto fmt_jitter = [](double mean, double mn, double mx, double stddev) {
+    if (mean <= 0.0)
+      return QString("--");
+    return QString("均值 %1 ms | [%2, %3] | σ=%4 ms")
+        .arg(QString::number(mean, 'f', 2))
+        .arg(QString::number(mn, 'f', 2))
+        .arg(QString::number(mx, 'f', 2))
+        .arg(QString::number(stddev, 'f', 2));
+  };
+
+  if (imu_jitter_label_) {
+    imu_jitter_label_->setText(fmt_jitter(imu_mean_dt, imu_min_dt, imu_max_dt,
+                                          imu_std_dt));
+  }
+  if (gnss_jitter_label_) {
+    gnss_jitter_label_->setText(
+        fmt_jitter(gnss_mean_dt, gnss_min_dt, gnss_max_dt, gnss_std_dt));
+  }
+}
+
 void MainWindow::onLoadGnss() {
   QString file_name = QFileDialog::getOpenFileName(
       this, "打开GNSS数据文件", "",
@@ -1217,6 +1393,7 @@ void MainWindow::onLoadGnss() {
   }
 
   worker_->load_gnss_data(file_name);
+  setMapInitialCenterFromGnss(file_name);
   QMessageBox::information(this, "GNSS数据",
                            QString("GNSS数据加载自:\n%1").arg(file_name));
 }
@@ -1289,6 +1466,7 @@ void MainWindow::onStrokeDetected(const StrokeEvent &event) {
   }
 
   if (!training_active) {
+    addPeakLabel(event);
     return;
   }
 
@@ -1322,6 +1500,9 @@ void MainWindow::onStrokeDetected(const StrokeEvent &event) {
   if (export_btn_) {
     export_btn_->setEnabled(!training_strokes_.empty());
   }
+
+  // Add lat/lon label at peak point on waveform
+  addPeakLabel(event);
 }
 
 void MainWindow::onSimTimeUpdated(qint64 sim_time_ms) {
@@ -1350,8 +1531,9 @@ void MainWindow::onExportStrokes() {
   }
 
   QTextStream out(&file);
-  out << "BoatCode,StrokeLength(m),TotalDistance(m),ElapsedTime,Pace(/500m),"
-         "Speed(m/s),StrokeRate(spm),StrokeCount,Lat,Lon,Timestamp\n";
+  // Only English header row
+  out << "boat_code,stroke_length_m,total_distance_m,elapsed_seconds,pace_per_500m,"
+         "speed_mps,stroke_rate_spm,stroke_count,lat,lon,timestamp\n";
 
   const QString boat_code = "01";
   for (const auto &row : training_strokes_) {

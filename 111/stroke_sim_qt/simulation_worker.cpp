@@ -5,6 +5,8 @@
 #include <QFileInfo>
 #include <QThread>
 #include <algorithm>
+#include <cmath>
+#include <limits>
 
 SimulationWorker::SimulationWorker(QObject *parent) : QObject(parent) {}
 
@@ -17,6 +19,7 @@ void SimulationWorker::set_detector(RealtimeStrokeDetector *detector) {
 void SimulationWorker::load_data(const CsvData &data) {
   data_ = data;
   current_idx_ = 0;
+  resetTimingStats();
   if (!data_.timestamps_ms.empty()) {
     base_time_ms_ = data_.timestamps_ms.front();
     // 每次加载新 IMU 数据时重置 GNSS 归一化状态
@@ -66,6 +69,10 @@ void SimulationWorker::load_gnss_data(const QString &csv_path) {
   gnss_offset_valid_ = false;
   gnss_utc_offset_ms_ = 0.0;
   nmea_normalized_ = false;
+  prev_gnss_sys_ms_ = -1;
+  gnss_dt_sum_ = gnss_dt_sq_sum_ = 0.0;
+  gnss_dt_count_ = 0;
+  gnss_dt_min_ = gnss_dt_max_ = 0.0;
 
   // Read line by line
   while (!file.atEnd()) {
@@ -182,6 +189,7 @@ void SimulationWorker::run() {
 
   running_ = true;
   paused_ = false;
+  resetTimingStats();
 
   QElapsedTimer timer;
   timer.start();
@@ -206,8 +214,40 @@ void SimulationWorker::run() {
         QThread::msleep(5);
       }
 
+      // IMU timing stats (offline)
+      if (prev_imu_ts_raw_ >= 0) {
+        double dt = static_cast<double>(data_.timestamps_ms[current_idx_] -
+                                        prev_imu_ts_raw_);
+        imu_dt_sum_ += dt;
+        imu_dt_sq_sum_ += dt * dt;
+        imu_dt_count_++;
+        if (imu_dt_count_ == 1) {
+          imu_dt_min_ = imu_dt_max_ = dt;
+        } else {
+          imu_dt_min_ = std::min(imu_dt_min_, dt);
+          imu_dt_max_ = std::max(imu_dt_max_, dt);
+        }
+      }
+      prev_imu_ts_raw_ = data_.timestamps_ms[current_idx_];
+
       uint64_t current_ts_ms = static_cast<uint64_t>(
           data_.timestamps_ms[current_idx_] - base_time_ms_);
+
+      // IMU timing stats (use raw timestamps)
+      if (prev_imu_ts_raw_ >= 0) {
+        double dt = static_cast<double>(data_.timestamps_ms[current_idx_] -
+                                        prev_imu_ts_raw_);
+        imu_dt_sum_ += dt;
+        imu_dt_sq_sum_ += dt * dt;
+        imu_dt_count_++;
+        if (imu_dt_count_ == 1) {
+          imu_dt_min_ = imu_dt_max_ = dt;
+        } else {
+          imu_dt_min_ = std::min(imu_dt_min_, dt);
+          imu_dt_max_ = std::max(imu_dt_max_, dt);
+        }
+      }
+      prev_imu_ts_raw_ = data_.timestamps_ms[current_idx_];
 
       auto event = detector_->process_sample(
           current_ts_ms, data_.acc_x[current_idx_], data_.acc_y[current_idx_],
@@ -249,8 +289,33 @@ void SimulationWorker::run() {
       double current_ts = data_.timestamps_ms[current_idx_] - base_time_ms_;
       while (current_nmea_idx_ < nmea_data_.size() &&
              nmea_data_[current_nmea_idx_].timestamp_ms <= current_ts) {
-        gnss_processor_.processNMEA(nmea_data_[current_nmea_idx_].raw_nmea,
-                                    nmea_data_[current_nmea_idx_].timestamp_ms);
+        const auto &gnss_entry = nmea_data_[current_nmea_idx_];
+        qint64 current_gnss_ts = (gnss_entry.raw_nmea_ms >= 0)
+                                     ? gnss_entry.raw_nmea_ms
+                                     : gnss_entry.raw_sys_ms;
+        qint64 &prev_ref =
+            (gnss_entry.raw_nmea_ms >= 0) ? prev_gnss_nmea_ms_ : prev_gnss_sys_ms_;
+
+        if (prev_ref >= 0) {
+          double dt = static_cast<double>(current_gnss_ts - prev_ref);
+          if (dt > 0.0) {
+            gnss_dt_sum_ += dt;
+            gnss_dt_sq_sum_ += dt * dt;
+            gnss_dt_count_++;
+            if (gnss_dt_count_ == 1) {
+              gnss_dt_min_ = gnss_dt_max_ = dt;
+            } else {
+              gnss_dt_min_ = std::min(gnss_dt_min_, dt);
+              gnss_dt_max_ = std::max(gnss_dt_max_, dt);
+            }
+            prev_ref = current_gnss_ts;
+          }
+        } else {
+          prev_ref = current_gnss_ts;
+        }
+
+        gnss_processor_.processNMEA(gnss_entry.raw_nmea,
+                                    gnss_entry.timestamp_ms);
         current_nmea_idx_++;
       }
 
@@ -265,6 +330,7 @@ void SimulationWorker::run() {
                          gnss_processor_.getHDOP(),
                          gnss_processor_.getFixStatus(),
                          gnss_processor_.getDiffAge());
+        emitTimeSync();
       }
     }
     emit frameUpdated();
@@ -334,9 +400,34 @@ void SimulationWorker::run() {
     // 2. Process GNSS
     while (current_nmea_idx_ < nmea_data_.size() &&
            nmea_data_[current_nmea_idx_].timestamp_ms <= target_sim_time) {
-      gnss_processor_.processNMEA(
-          String(nmea_data_[current_nmea_idx_].raw_nmea),
-          nmea_data_[current_nmea_idx_].timestamp_ms);
+      const auto &gnss_entry = nmea_data_[current_nmea_idx_];
+      // Prefer nmea_ms for jitter stats; fallback to sys_ms if missing
+      qint64 current_gnss_ts = (gnss_entry.raw_nmea_ms >= 0)
+                                   ? gnss_entry.raw_nmea_ms
+                                   : gnss_entry.raw_sys_ms;
+      qint64 &prev_ref =
+          (gnss_entry.raw_nmea_ms >= 0) ? prev_gnss_nmea_ms_ : prev_gnss_sys_ms_;
+
+      if (prev_ref >= 0) {
+        double dt = static_cast<double>(current_gnss_ts - prev_ref);
+        if (dt > 0.0) { // 忽略重复时间戳导致的0/负间隔
+          gnss_dt_sum_ += dt;
+          gnss_dt_sq_sum_ += dt * dt;
+          gnss_dt_count_++;
+          if (gnss_dt_count_ == 1) {
+            gnss_dt_min_ = gnss_dt_max_ = dt;
+          } else {
+            gnss_dt_min_ = std::min(gnss_dt_min_, dt);
+            gnss_dt_max_ = std::max(gnss_dt_max_, dt);
+          }
+          prev_ref = current_gnss_ts;
+        }
+      } else {
+        prev_ref = current_gnss_ts;
+      }
+
+      gnss_processor_.processNMEA(String(gnss_entry.raw_nmea),
+                                  gnss_entry.timestamp_ms);
       current_nmea_idx_++;
     }
 
@@ -352,6 +443,7 @@ void SimulationWorker::run() {
           gnss_processor_.getVisibleSatellites(), // or solvingSatellites
           gnss_processor_.getPaceString(), gnss_processor_.getHDOP(),
           gnss_processor_.getFixStatus(), gnss_processor_.getDiffAge());
+      emitTimeSync();
 
       last_ui_update = elapsed;
     }
@@ -361,4 +453,62 @@ void SimulationWorker::run() {
 
   running_ = false;
   emit finished();
+}
+
+void SimulationWorker::resetTimingStats() {
+  prev_imu_ts_raw_ = -1;
+  imu_dt_sum_ = imu_dt_sq_sum_ = 0.0;
+  imu_dt_count_ = 0;
+  imu_dt_min_ = imu_dt_max_ = 0.0;
+
+  prev_gnss_sys_ms_ = -1;
+  prev_gnss_nmea_ms_ = -1;
+  gnss_dt_sum_ = gnss_dt_sq_sum_ = 0.0;
+  gnss_dt_count_ = 0;
+  gnss_dt_min_ = gnss_dt_max_ = 0.0;
+}
+
+void SimulationWorker::emitTimeSync() {
+  computeImuStatsIfEmpty();
+
+  auto calc_std = [](double sum, double sq_sum, int n) -> double {
+    if (n <= 1)
+      return 0.0;
+    double mean = sum / n;
+    double var = (sq_sum / n) - mean * mean;
+    return (var > 0.0) ? std::sqrt(var) : 0.0;
+  };
+
+  double imu_mean = (imu_dt_count_ > 0) ? (imu_dt_sum_ / imu_dt_count_) : 0.0;
+  double imu_std = calc_std(imu_dt_sum_, imu_dt_sq_sum_, imu_dt_count_);
+  double gnss_mean =
+      (gnss_dt_count_ > 0) ? (gnss_dt_sum_ / gnss_dt_count_) : 0.0;
+  double gnss_std = calc_std(gnss_dt_sum_, gnss_dt_sq_sum_, gnss_dt_count_);
+
+  double gnss_offset =
+      gnss_offset_valid_ ? gnss_utc_offset_ms_ : std::numeric_limits<double>::quiet_NaN();
+
+  emit timeSyncUpdated(base_time_ms_, gnss_offset, imu_mean, imu_dt_min_,
+                       imu_dt_max_, imu_std, gnss_mean, gnss_dt_min_,
+                       gnss_dt_max_, gnss_std);
+}
+
+void SimulationWorker::computeImuStatsIfEmpty() {
+  if (imu_dt_count_ > 0 || data_.timestamps_ms.size() < 2) {
+    return;
+  }
+  double prev = data_.timestamps_ms[0];
+  for (size_t i = 1; i < data_.timestamps_ms.size(); ++i) {
+    double dt = data_.timestamps_ms[i] - prev;
+    prev = data_.timestamps_ms[i];
+    imu_dt_sum_ += dt;
+    imu_dt_sq_sum_ += dt * dt;
+    imu_dt_count_++;
+    if (imu_dt_count_ == 1) {
+      imu_dt_min_ = imu_dt_max_ = dt;
+    } else {
+      imu_dt_min_ = std::min(imu_dt_min_, dt);
+      imu_dt_max_ = std::max(imu_dt_max_, dt);
+    }
+  }
 }

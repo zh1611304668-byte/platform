@@ -52,6 +52,17 @@ template <> constexpr inline auto SimulationWorker::qt_create_metaobjectdata<qt_
         "hdop",
         "fix",
         "diff_age",
+        "timeSyncUpdated",
+        "base_time_ms",
+        "gnss_offset_ms",
+        "imu_mean_dt",
+        "imu_min_dt",
+        "imu_max_dt",
+        "imu_std_dt",
+        "gnss_mean_dt",
+        "gnss_min_dt",
+        "gnss_max_dt",
+        "gnss_std_dt",
         "strokeDetected",
         "StrokeEvent",
         "event",
@@ -71,14 +82,20 @@ template <> constexpr inline auto SimulationWorker::qt_create_metaobjectdata<qt_
             { QMetaType::Double, 6 }, { QMetaType::Double, 7 }, { QMetaType::Double, 8 }, { QMetaType::Int, 9 },
             { QMetaType::QString, 10 }, { QMetaType::QString, 11 }, { QMetaType::QString, 12 }, { QMetaType::QString, 13 },
         }}),
+        // Signal 'timeSyncUpdated'
+        QtMocHelpers::SignalData<void(double, double, double, double, double, double, double, double, double, double)>(14, 2, QMC::AccessPublic, QMetaType::Void, {{
+            { QMetaType::Double, 15 }, { QMetaType::Double, 16 }, { QMetaType::Double, 17 }, { QMetaType::Double, 18 },
+            { QMetaType::Double, 19 }, { QMetaType::Double, 20 }, { QMetaType::Double, 21 }, { QMetaType::Double, 22 },
+            { QMetaType::Double, 23 }, { QMetaType::Double, 24 },
+        }}),
         // Signal 'strokeDetected'
-        QtMocHelpers::SignalData<void(const StrokeEvent &)>(14, 2, QMC::AccessPublic, QMetaType::Void, {{
-            { 0x80000000 | 15, 16 },
+        QtMocHelpers::SignalData<void(const StrokeEvent &)>(25, 2, QMC::AccessPublic, QMetaType::Void, {{
+            { 0x80000000 | 26, 27 },
         }}),
         // Signal 'finished'
-        QtMocHelpers::SignalData<void()>(17, 2, QMC::AccessPublic, QMetaType::Void),
+        QtMocHelpers::SignalData<void()>(28, 2, QMC::AccessPublic, QMetaType::Void),
         // Slot 'run'
-        QtMocHelpers::SlotData<void()>(18, 2, QMC::AccessPublic, QMetaType::Void),
+        QtMocHelpers::SlotData<void()>(29, 2, QMC::AccessPublic, QMetaType::Void),
     };
     QtMocHelpers::UintData qt_properties {
     };
@@ -105,9 +122,10 @@ void SimulationWorker::qt_static_metacall(QObject *_o, QMetaObject::Call _c, int
         case 0: _t->frameUpdated(); break;
         case 1: _t->simTimeUpdated((*reinterpret_cast<std::add_pointer_t<qint64>>(_a[1]))); break;
         case 2: _t->gnssUpdated((*reinterpret_cast<std::add_pointer_t<double>>(_a[1])),(*reinterpret_cast<std::add_pointer_t<double>>(_a[2])),(*reinterpret_cast<std::add_pointer_t<double>>(_a[3])),(*reinterpret_cast<std::add_pointer_t<int>>(_a[4])),(*reinterpret_cast<std::add_pointer_t<QString>>(_a[5])),(*reinterpret_cast<std::add_pointer_t<QString>>(_a[6])),(*reinterpret_cast<std::add_pointer_t<QString>>(_a[7])),(*reinterpret_cast<std::add_pointer_t<QString>>(_a[8]))); break;
-        case 3: _t->strokeDetected((*reinterpret_cast<std::add_pointer_t<StrokeEvent>>(_a[1]))); break;
-        case 4: _t->finished(); break;
-        case 5: _t->run(); break;
+        case 3: _t->timeSyncUpdated((*reinterpret_cast<std::add_pointer_t<double>>(_a[1])),(*reinterpret_cast<std::add_pointer_t<double>>(_a[2])),(*reinterpret_cast<std::add_pointer_t<double>>(_a[3])),(*reinterpret_cast<std::add_pointer_t<double>>(_a[4])),(*reinterpret_cast<std::add_pointer_t<double>>(_a[5])),(*reinterpret_cast<std::add_pointer_t<double>>(_a[6])),(*reinterpret_cast<std::add_pointer_t<double>>(_a[7])),(*reinterpret_cast<std::add_pointer_t<double>>(_a[8])),(*reinterpret_cast<std::add_pointer_t<double>>(_a[9])),(*reinterpret_cast<std::add_pointer_t<double>>(_a[10]))); break;
+        case 4: _t->strokeDetected((*reinterpret_cast<std::add_pointer_t<StrokeEvent>>(_a[1]))); break;
+        case 5: _t->finished(); break;
+        case 6: _t->run(); break;
         default: ;
         }
     }
@@ -118,9 +136,11 @@ void SimulationWorker::qt_static_metacall(QObject *_o, QMetaObject::Call _c, int
             return;
         if (QtMocHelpers::indexOfMethod<void (SimulationWorker::*)(double , double , double , int , QString , const QString & , const QString & , const QString & )>(_a, &SimulationWorker::gnssUpdated, 2))
             return;
-        if (QtMocHelpers::indexOfMethod<void (SimulationWorker::*)(const StrokeEvent & )>(_a, &SimulationWorker::strokeDetected, 3))
+        if (QtMocHelpers::indexOfMethod<void (SimulationWorker::*)(double , double , double , double , double , double , double , double , double , double )>(_a, &SimulationWorker::timeSyncUpdated, 3))
             return;
-        if (QtMocHelpers::indexOfMethod<void (SimulationWorker::*)()>(_a, &SimulationWorker::finished, 4))
+        if (QtMocHelpers::indexOfMethod<void (SimulationWorker::*)(const StrokeEvent & )>(_a, &SimulationWorker::strokeDetected, 4))
+            return;
+        if (QtMocHelpers::indexOfMethod<void (SimulationWorker::*)()>(_a, &SimulationWorker::finished, 5))
             return;
     }
 }
@@ -144,14 +164,14 @@ int SimulationWorker::qt_metacall(QMetaObject::Call _c, int _id, void **_a)
     if (_id < 0)
         return _id;
     if (_c == QMetaObject::InvokeMetaMethod) {
-        if (_id < 6)
+        if (_id < 7)
             qt_static_metacall(this, _c, _id, _a);
-        _id -= 6;
+        _id -= 7;
     }
     if (_c == QMetaObject::RegisterMethodArgumentMetaType) {
-        if (_id < 6)
+        if (_id < 7)
             *reinterpret_cast<QMetaType *>(_a[0]) = QMetaType();
-        _id -= 6;
+        _id -= 7;
     }
     return _id;
 }
@@ -175,14 +195,20 @@ void SimulationWorker::gnssUpdated(double _t1, double _t2, double _t3, int _t4, 
 }
 
 // SIGNAL 3
-void SimulationWorker::strokeDetected(const StrokeEvent & _t1)
+void SimulationWorker::timeSyncUpdated(double _t1, double _t2, double _t3, double _t4, double _t5, double _t6, double _t7, double _t8, double _t9, double _t10)
 {
-    QMetaObject::activate<void>(this, &staticMetaObject, 3, nullptr, _t1);
+    QMetaObject::activate<void>(this, &staticMetaObject, 3, nullptr, _t1, _t2, _t3, _t4, _t5, _t6, _t7, _t8, _t9, _t10);
 }
 
 // SIGNAL 4
+void SimulationWorker::strokeDetected(const StrokeEvent & _t1)
+{
+    QMetaObject::activate<void>(this, &staticMetaObject, 4, nullptr, _t1);
+}
+
+// SIGNAL 5
 void SimulationWorker::finished()
 {
-    QMetaObject::activate(this, &staticMetaObject, 4, nullptr);
+    QMetaObject::activate(this, &staticMetaObject, 5, nullptr);
 }
 QT_WARNING_POP

@@ -1652,7 +1652,7 @@ build stroke_sim_qt.exe: CXX_EXECUTABLE_LINKER__stroke_sim_qt_Debug CMakeFiles/s
   FLAGS = -DQT_QML_DEBUG -g
   LINK_LIBRARIES = C:/Qt/6.10.2/mingw_64/lib/libQt6Charts.a  C:/Qt/6.10.2/mingw_64/lib/libQt6QuickWidgets.a  C:/Qt/6.10.2/mingw_64/lib/libQt6Location.a  C:/Qt/6.10.2/mingw_64/lib/libQt6OpenGLWidgets.a  C:/Qt/6.10.2/mingw_64/lib/libQt6Widgets.a  C:/Qt/6.10.2/mingw_64/lib/libQt6PositioningQuick.a  C:/Qt/6.10.2/mingw_64/lib/libQt6Quick.a  C:/Qt/6.10.2/mingw_64/lib/libQt6OpenGL.a  C:/Qt/6.10.2/mingw_64/lib/libQt6Gui.a  -ld3d11  -ldxgi  -ldxguid  -ld3d12  -luser32  C:/Qt/6.10.2/mingw_64/lib/libQt6Qml.a  C:/Qt/6.10.2/mingw_64/lib/libQt6Network.a  -lws2_32  -lshell32  C:/Qt/6.10.2/mingw_64/lib/libQt6Positioning.a  C:/Qt/6.10.2/mingw_64/lib/libQt6Core.a  -lmpr  -luserenv  -lkernel32 -luser32 -lgdi32 -lwinspool -lshell32 -lole32 -loleaut32 -luuid -lcomdlg32 -ladvapi32
   OBJECT_DIR = CMakeFiles\stroke_sim_qt.dir
-  POST_BUILD = cd .
+  POST_BUILD = C:\WINDOWS\system32\cmd.exe /C "cd /D D:\Desktop\project-rawing\platform\111\stroke_sim_qt\build\Desktop_Qt_6_10_2_MinGW_64_bit-Debug && C:\Qt\6.10.2\mingw_64\bin\windeployqt.exe --qmldir D:/Desktop/project-rawing/platform/111/stroke_sim_qt D:/Desktop/project-rawing/platform/111/stroke_sim_qt/build/Desktop_Qt_6_10_2_MinGW_64_bit-Debug/stroke_sim_qt.exe"
   PRE_LINK = cd .
   TARGET_FILE = stroke_sim_qt.exe
   TARGET_IMPLIB = libstroke_sim_qt.dll.a

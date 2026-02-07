@@ -47,6 +47,16 @@ Item {
     strokeModel.clear();
   }
 
+  function setInitialCenter(lat, lon) {
+    if (!isFinite(lat) || !isFinite(lon)) return;
+    var coord = QtPositioning.coordinate(lat, lon);
+    defaultLat = lat;
+    defaultLon = lon;
+    map.center = coord;
+    map.zoomLevel = 16;
+    hasCenter = true;
+  }
+
   Map {
     id: map
     anchors.fill: parent

@@ -106,3 +106,21 @@ target_link_libraries(stroke_sim_qt PRIVATE ${QT_LIBS})
 # if(SDL2_FOUND)
 #     target_link_libraries(stroke_sim_qt PRIVATE ${SDL2_LIBRARIES})
 # endif()
+
+# Windows: bundle Qt runtime & QML modules automatically after each build
+if(WIN32)
+    # Derive Qt bin path from the Qt6 CMake package location (works with Qt Creator kits)
+    get_filename_component(QT_BIN_DIR "${Qt6_DIR}/../../../bin" ABSOLUTE)
+    find_program(WINDEPLOYQT_EXECUTABLE windeployqt
+        HINTS "${QT_BIN_DIR}" "$ENV{QTDIR}/bin" "$ENV{Qt6_DIR}/bin")
+
+    if(NOT WINDEPLOYQT_EXECUTABLE)
+        message(WARNING "windeployqt not found; deploy step skipped. Install Qt tools or set QTDIR.")
+    else()
+        add_custom_command(TARGET stroke_sim_qt POST_BUILD
+            COMMAND "${WINDEPLOYQT_EXECUTABLE}"
+                --qmldir "${CMAKE_CURRENT_SOURCE_DIR}"
+                "$<TARGET_FILE:stroke_sim_qt>"
+            COMMENT "Running windeployqt to copy Qt and QML dependencies")
+    endif()
+endif()

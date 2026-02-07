@@ -58,6 +58,17 @@ template <> constexpr inline auto MainWindow::qt_create_metaobjectdata<qt_meta_t
         "hdop",
         "fix",
         "diff_age",
+        "onTimeSyncUpdated",
+        "base_time_ms",
+        "gnss_offset_ms",
+        "imu_mean_dt",
+        "imu_min_dt",
+        "imu_max_dt",
+        "imu_std_dt",
+        "gnss_mean_dt",
+        "gnss_min_dt",
+        "gnss_max_dt",
+        "gnss_std_dt",
         "onSimTimeUpdated",
         "sim_time_ms",
         "onStrokeDetected",
@@ -96,32 +107,38 @@ template <> constexpr inline auto MainWindow::qt_create_metaobjectdata<qt_meta_t
             { QMetaType::Double, 11 }, { QMetaType::Double, 12 }, { QMetaType::Double, 13 }, { QMetaType::Int, 14 },
             { QMetaType::QString, 15 }, { QMetaType::QString, 16 }, { QMetaType::QString, 17 }, { QMetaType::QString, 18 },
         }}),
+        // Slot 'onTimeSyncUpdated'
+        QtMocHelpers::SlotData<void(double, double, double, double, double, double, double, double, double, double)>(19, 2, QMC::AccessPrivate, QMetaType::Void, {{
+            { QMetaType::Double, 20 }, { QMetaType::Double, 21 }, { QMetaType::Double, 22 }, { QMetaType::Double, 23 },
+            { QMetaType::Double, 24 }, { QMetaType::Double, 25 }, { QMetaType::Double, 26 }, { QMetaType::Double, 27 },
+            { QMetaType::Double, 28 }, { QMetaType::Double, 29 },
+        }}),
         // Slot 'onSimTimeUpdated'
-        QtMocHelpers::SlotData<void(qint64)>(19, 2, QMC::AccessPrivate, QMetaType::Void, {{
-            { QMetaType::LongLong, 20 },
+        QtMocHelpers::SlotData<void(qint64)>(30, 2, QMC::AccessPrivate, QMetaType::Void, {{
+            { QMetaType::LongLong, 31 },
         }}),
         // Slot 'onStrokeDetected'
-        QtMocHelpers::SlotData<void(const StrokeEvent &)>(21, 2, QMC::AccessPrivate, QMetaType::Void, {{
-            { 0x80000000 | 22, 23 },
+        QtMocHelpers::SlotData<void(const StrokeEvent &)>(32, 2, QMC::AccessPrivate, QMetaType::Void, {{
+            { 0x80000000 | 33, 34 },
         }}),
         // Slot 'updateUi'
-        QtMocHelpers::SlotData<void()>(24, 2, QMC::AccessPrivate, QMetaType::Void),
+        QtMocHelpers::SlotData<void()>(35, 2, QMC::AccessPrivate, QMetaType::Void),
         // Slot 'onK1Pressed'
-        QtMocHelpers::SlotData<void()>(25, 2, QMC::AccessPrivate, QMetaType::Void),
+        QtMocHelpers::SlotData<void()>(36, 2, QMC::AccessPrivate, QMetaType::Void),
         // Slot 'onK2Pressed'
-        QtMocHelpers::SlotData<void()>(26, 2, QMC::AccessPrivate, QMetaType::Void),
+        QtMocHelpers::SlotData<void()>(37, 2, QMC::AccessPrivate, QMetaType::Void),
         // Slot 'onK3Pressed'
-        QtMocHelpers::SlotData<void()>(27, 2, QMC::AccessPrivate, QMetaType::Void),
+        QtMocHelpers::SlotData<void()>(38, 2, QMC::AccessPrivate, QMetaType::Void),
         // Slot 'onK4Pressed'
-        QtMocHelpers::SlotData<void()>(28, 2, QMC::AccessPrivate, QMetaType::Void),
+        QtMocHelpers::SlotData<void()>(39, 2, QMC::AccessPrivate, QMetaType::Void),
         // Slot 'onK4Released'
-        QtMocHelpers::SlotData<void()>(29, 2, QMC::AccessPrivate, QMetaType::Void),
+        QtMocHelpers::SlotData<void()>(40, 2, QMC::AccessPrivate, QMetaType::Void),
         // Slot 'onTrainingStarted'
-        QtMocHelpers::SlotData<void()>(30, 2, QMC::AccessPrivate, QMetaType::Void),
+        QtMocHelpers::SlotData<void()>(41, 2, QMC::AccessPrivate, QMetaType::Void),
         // Slot 'onTrainingStopped'
-        QtMocHelpers::SlotData<void()>(31, 2, QMC::AccessPrivate, QMetaType::Void),
+        QtMocHelpers::SlotData<void()>(42, 2, QMC::AccessPrivate, QMetaType::Void),
         // Slot 'onExportStrokes'
-        QtMocHelpers::SlotData<void()>(32, 2, QMC::AccessPrivate, QMetaType::Void),
+        QtMocHelpers::SlotData<void()>(43, 2, QMC::AccessPrivate, QMetaType::Void),
     };
     QtMocHelpers::UintData qt_properties {
     };
@@ -152,17 +169,18 @@ void MainWindow::qt_static_metacall(QObject *_o, QMetaObject::Call _c, int _id, 
         case 4: _t->onAxisChanged((*reinterpret_cast<std::add_pointer_t<int>>(_a[1]))); break;
         case 5: _t->onSimulationFinished(); break;
         case 6: _t->onGnssUpdated((*reinterpret_cast<std::add_pointer_t<double>>(_a[1])),(*reinterpret_cast<std::add_pointer_t<double>>(_a[2])),(*reinterpret_cast<std::add_pointer_t<double>>(_a[3])),(*reinterpret_cast<std::add_pointer_t<int>>(_a[4])),(*reinterpret_cast<std::add_pointer_t<QString>>(_a[5])),(*reinterpret_cast<std::add_pointer_t<QString>>(_a[6])),(*reinterpret_cast<std::add_pointer_t<QString>>(_a[7])),(*reinterpret_cast<std::add_pointer_t<QString>>(_a[8]))); break;
-        case 7: _t->onSimTimeUpdated((*reinterpret_cast<std::add_pointer_t<qint64>>(_a[1]))); break;
-        case 8: _t->onStrokeDetected((*reinterpret_cast<std::add_pointer_t<StrokeEvent>>(_a[1]))); break;
-        case 9: _t->updateUi(); break;
-        case 10: _t->onK1Pressed(); break;
-        case 11: _t->onK2Pressed(); break;
-        case 12: _t->onK3Pressed(); break;
-        case 13: _t->onK4Pressed(); break;
-        case 14: _t->onK4Released(); break;
-        case 15: _t->onTrainingStarted(); break;
-        case 16: _t->onTrainingStopped(); break;
-        case 17: _t->onExportStrokes(); break;
+        case 7: _t->onTimeSyncUpdated((*reinterpret_cast<std::add_pointer_t<double>>(_a[1])),(*reinterpret_cast<std::add_pointer_t<double>>(_a[2])),(*reinterpret_cast<std::add_pointer_t<double>>(_a[3])),(*reinterpret_cast<std::add_pointer_t<double>>(_a[4])),(*reinterpret_cast<std::add_pointer_t<double>>(_a[5])),(*reinterpret_cast<std::add_pointer_t<double>>(_a[6])),(*reinterpret_cast<std::add_pointer_t<double>>(_a[7])),(*reinterpret_cast<std::add_pointer_t<double>>(_a[8])),(*reinterpret_cast<std::add_pointer_t<double>>(_a[9])),(*reinterpret_cast<std::add_pointer_t<double>>(_a[10]))); break;
+        case 8: _t->onSimTimeUpdated((*reinterpret_cast<std::add_pointer_t<qint64>>(_a[1]))); break;
+        case 9: _t->onStrokeDetected((*reinterpret_cast<std::add_pointer_t<StrokeEvent>>(_a[1]))); break;
+        case 10: _t->updateUi(); break;
+        case 11: _t->onK1Pressed(); break;
+        case 12: _t->onK2Pressed(); break;
+        case 13: _t->onK3Pressed(); break;
+        case 14: _t->onK4Pressed(); break;
+        case 15: _t->onK4Released(); break;
+        case 16: _t->onTrainingStarted(); break;
+        case 17: _t->onTrainingStopped(); break;
+        case 18: _t->onExportStrokes(); break;
         default: ;
         }
     }
@@ -187,14 +205,14 @@ int MainWindow::qt_metacall(QMetaObject::Call _c, int _id, void **_a)
     if (_id < 0)
         return _id;
     if (_c == QMetaObject::InvokeMetaMethod) {
-        if (_id < 18)
+        if (_id < 19)
             qt_static_metacall(this, _c, _id, _a);
-        _id -= 18;
+        _id -= 19;
     }
     if (_c == QMetaObject::RegisterMethodArgumentMetaType) {
-        if (_id < 18)
+        if (_id < 19)
             *reinterpret_cast<QMetaType *>(_a[0]) = QMetaType();
-        _id -= 18;
+        _id -= 19;
     }
     return _id;
 }

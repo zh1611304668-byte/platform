@@ -25,6 +25,7 @@
 #include "training_mode.h"
 
 class QQuickWidget;
+class QGraphicsTextItem;
 
 class MainWindow : public QMainWindow {
   Q_OBJECT
@@ -43,6 +44,11 @@ private slots:
   void onGnssUpdated(double speed_mps, double lat, double lon, int sats,
                      QString pace, const QString &hdop, const QString &fix,
                      const QString &diff_age);
+  void onTimeSyncUpdated(double base_time_ms, double gnss_offset_ms,
+                         double imu_mean_dt, double imu_min_dt,
+                         double imu_max_dt, double imu_std_dt,
+                         double gnss_mean_dt, double gnss_min_dt,
+                         double gnss_max_dt, double gnss_std_dt);
   void onSimTimeUpdated(qint64 sim_time_ms);
   void onStrokeDetected(const StrokeEvent &event);
   void updateUi();
@@ -65,11 +71,15 @@ private:
   QWidget *createChartLegend();
   void initMap();
   void addMapPoint(double lat, double lon);
+  void setMapInitialCenterFromGnss(const QString &path);
   void resetSimulation();
   void syncParamsToDetector();
   void syncParamsFromDetector();
   void updateStateIndicator();
   void updateChart();
+  void addPeakLabel(const StrokeEvent &event);
+  void updatePeakLabels(double time_offset);
+  void clearPeakLabels();
 
   RealtimeStrokeDetector detector_;
   CsvData data_;
@@ -102,6 +112,10 @@ private:
   QLabel *recovery_label_ = nullptr;
   QLabel *stroke_length_label_ = nullptr;
   QLabel *distance_label_ = nullptr;
+  QLabel *time_base_label_ = nullptr;
+  QLabel *gnss_offset_label_ = nullptr;
+  QLabel *imu_jitter_label_ = nullptr;
+  QLabel *gnss_jitter_label_ = nullptr;
   QQuickWidget *map_view_ = nullptr;
 
   // Parameter Tab Widget
@@ -163,6 +177,15 @@ private:
   double last_gnss_lon_ = 0.0;
   QString last_gnss_pace_str_ = "00:00.0";
   bool gnss_has_fix_ = false;
+
+  struct PeakLabel {
+    double peak_time = 0.0;  // seconds
+    double peak_value = 0.0; // filtered value
+    QString text;
+    QGraphicsTextItem *item = nullptr;
+  };
+  std::vector<PeakLabel> peak_labels_;
+  double last_time_offset_ = 0.0;
 
   // LVGL display widget
   LvglWidget *lvgl_widget_ = nullptr;

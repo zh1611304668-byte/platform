@@ -86,6 +86,7 @@ private:
   QueueHandle_t imuQueue;
   TaskHandle_t imuTaskHandle;
   bool imuLoggingEnabled;
+  uint32_t imuDropCount = 0;
   static const size_t IMU_QUEUE_LEN = 512; // 保守容量，主循环快速返回
   static const int IMU_BATCH_SIZE = 50;    // 单次批写条数，降低写放大
 
