@@ -60,8 +60,8 @@ bool SDCardManager::begin() {
     }
   }
   if (imuQueue && !imuTaskHandle) {
-    BaseType_t res = xTaskCreatePinnedToCore(imuLogTask, "IMU_SD_Writer",
-                                             8192, this, 1, &imuTaskHandle, 1);
+    BaseType_t res = xTaskCreatePinnedToCore(imuLogTask, "IMU_SD_Writer", 8192,
+                                             this, 1, &imuTaskHandle, 1);
     if (res != pdPASS) {
       Serial.println("[SD] ⚠️ 创建IMU写入任务失败，保持同步写入模式");
       imuTaskHandle = nullptr;
@@ -308,15 +308,17 @@ void SDCardManager::appendPerStrokeCsv(const StrokeSnapshot &snapshot) {
                 snapshot.strokeNumber, snapshot.elapsedSeconds,
                 elapsed.c_str());
 
-  String split = (snapshot.speed > 0.05f) ? formatSplit(500.0f / snapshot.speed)
-                                          : String("--");
+  // 四舍五入到2位小数，与CSV中 %.2f 格式保持一致，确保配速与速度字段对齐
+  float roundedSpeed = roundf(snapshot.speed * 100.0f) / 100.0f;
+  String split = (roundedSpeed > 0.05f) ? formatSplit(500.0f / roundedSpeed)
+                                        : String("--");
 
   char line[512];
   snprintf(line, sizeof(line), "%s,%.2f,%.2f,%s,%s,%.2f,%.1f,%d,%.7f,%.7f,%s",
            snapshot.boatCode.c_str(), snapshot.strokeLength,
-           snapshot.totalDistance, elapsed.c_str(), split.c_str(),
-           snapshot.speed, snapshot.strokeRate, snapshot.strokeNumber,
-           snapshot.lat, snapshot.lon, snapshot.captureTime.c_str());
+           snapshot.totalDistance, elapsed.c_str(), split.c_str(), roundedSpeed,
+           snapshot.strokeRate, snapshot.strokeNumber, snapshot.lat,
+           snapshot.lon, snapshot.captureTime.c_str());
   strokeCsvFile.println(line);
 }
 
@@ -364,7 +366,8 @@ void SDCardManager::logNmeaRaw(const String &nmea) {
       nmea.startsWith("$GNGLL") || nmea.startsWith("$GPGLL")) {
     int firstComma = nmea.indexOf(',');
     if (firstComma > 0 && nmea.length() >= firstComma + 7) {
-      String timeField = nmea.substring(firstComma + 1, firstComma + 11); // hhmmss.ss
+      String timeField =
+          nmea.substring(firstComma + 1, firstComma + 11); // hhmmss.ss
       if (timeField.length() >= 6 && isDigit(timeField[0])) {
         int hh = timeField.substring(0, 2).toInt();
         int mm = timeField.substring(2, 4).toInt();
@@ -545,24 +548,26 @@ void SDCardManager::imuLogTask(void *param) {
 
   while (true) {
     ImuSample sample;
-    bool got = xQueueReceive(self->imuQueue, &sample, pdMS_TO_TICKS(100)) == pdTRUE;
+    bool got =
+        xQueueReceive(self->imuQueue, &sample, pdMS_TO_TICKS(100)) == pdTRUE;
 
     // 如果被禁用或文件不可用，直接跳过
     if (self->disabled || !self->imuFile) {
       // nothing
     } else if (got) {
-      int written = snprintf(buffer + bufLen, sizeof(buffer) - bufLen,
-                             "%lu,%.4f,%.4f,%.4f\n",
-                             (unsigned long)sample.ts_ms, sample.ax, sample.ay,
-                             sample.az);
+      int written = snprintf(
+          buffer + bufLen, sizeof(buffer) - bufLen, "%lu,%.4f,%.4f,%.4f\n",
+          (unsigned long)sample.ts_ms, sample.ax, sample.ay, sample.az);
       if (written > 0 && written < (int)(sizeof(buffer) - bufLen)) {
         bufLen += written;
         batchCount++;
       }
     }
 
-    bool timeFlush = (xTaskGetTickCount() - lastFlush) >= pdMS_TO_TICKS(FLUSH_INTERVAL_MS);
-    bool needFlush = (bufLen > 1800) || (batchCount >= IMU_BATCH_SIZE) || (timeFlush && bufLen > 0);
+    bool timeFlush =
+        (xTaskGetTickCount() - lastFlush) >= pdMS_TO_TICKS(FLUSH_INTERVAL_MS);
+    bool needFlush = (bufLen > 1800) || (batchCount >= IMU_BATCH_SIZE) ||
+                     (timeFlush && bufLen > 0);
 
     if (needFlush && self->imuFile && !self->disabled && bufLen > 0) {
       size_t flushed = self->imuFile.write((uint8_t *)buffer, bufLen);

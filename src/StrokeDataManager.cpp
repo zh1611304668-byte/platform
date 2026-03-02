@@ -33,6 +33,58 @@ static double haversineDistance(double lat1, double lon1, double lat2,
   return R * c;
 }
 
+// 从时间戳中减去指定毫秒数，用于反推波峰瞬间的RTC时间
+static String subtractMillisFromTimestamp(const String &timestamp,
+                                          unsigned long offsetMs) {
+  if (timestamp.length() < 19 || offsetMs == 0)
+    return timestamp;
+
+  int year = timestamp.substring(0, 4).toInt();
+  int month = timestamp.substring(5, 7).toInt();
+  int day = timestamp.substring(8, 10).toInt();
+  int hour = timestamp.substring(11, 13).toInt();
+  int minute = timestamp.substring(14, 16).toInt();
+  int second = timestamp.substring(17, 19).toInt();
+  int ms = 0;
+  if (timestamp.length() >= 23 && timestamp.charAt(19) == '.') {
+    ms = timestamp.substring(20, 23).toInt();
+  }
+
+  // 总毫秒数减去偏移
+  long totalMs = (long)ms - (long)offsetMs;
+  long totalSec = (long)hour * 3600 + (long)minute * 60 + (long)second;
+
+  // 处理毫秒借位
+  while (totalMs < 0) {
+    totalMs += 1000;
+    totalSec--;
+  }
+
+  // 处理秒借位（跨天，极端情况下才会触发）
+  if (totalSec < 0) {
+    totalSec += 86400;
+    day--;
+    if (day < 1) {
+      month--;
+      if (month < 1) {
+        month = 12;
+        year--;
+      }
+      int daysInMonth[] = {31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31};
+      day = daysInMonth[month - 1];
+    }
+  }
+
+  hour = (int)(totalSec / 3600);
+  minute = (int)((totalSec % 3600) / 60);
+  second = (int)(totalSec % 60);
+
+  char buf[28];
+  snprintf(buf, sizeof(buf), "%04d-%02d-%02d %02d:%02d:%02d.%03ld", year, month,
+           day, hour, minute, second, totalMs);
+  return String(buf);
+}
+
 void normalizeStrokeSnapshot(StrokeSnapshot &snapshot) {
   if ((snapshot.lat == 0.0 && snapshot.lon == 0.0) && gnss.isValidFix()) {
     double latestLat = gnss.getLatitude();
@@ -164,19 +216,32 @@ bool StrokeDataManager::captureStroke(int currentStrokeCount) {
   snapshot.power = gnss.getPower();
   snapshot.pace = (snapshot.speed > 0.05f) ? (500.0f / snapshot.speed) : 0.0f;
 
-  // IMU数据
-  // 强制第一桨桨频为0，与服务器/SD卡逻辑一致
+  // IMU数据 - 桨频从 captureTime 差值计算，确保与 Timestamp/ElapsedTime
+  // 完全对齐
+  static String s_prevCaptureTime = "";
   if (snapshot.strokeNumber == 1) {
     snapshot.strokeRate = 0.0f;
+    s_prevCaptureTime = snapshot.captureTime;
+  } else if (!s_prevCaptureTime.isEmpty() &&
+             snapshot.captureTime.length() >= 19) {
+    extern float calculateTimeDifference(const String &timestamp1,
+                                         const String &timestamp2);
+    float interval =
+        calculateTimeDifference(s_prevCaptureTime, snapshot.captureTime);
+    if (interval > 0.01f) {
+      snapshot.strokeRate = 60.0f / interval;
+    } else {
+      snapshot.strokeRate = strokeRate; // 回退到IMU桨频
+    }
+    s_prevCaptureTime = snapshot.captureTime;
   } else {
-    snapshot.strokeRate = strokeRate; // 全局变量
+    snapshot.strokeRate = strokeRate;
+    s_prevCaptureTime = snapshot.captureTime;
   }
 
   // 先做一次归一化，确保后续划距计算使用最终要输出的坐标
   normalizeStrokeSnapshot(snapshot);
 
-  // 严格对齐：使用将要输出的坐标重新计算划距
-  // 当前坐标四舍五入到7位小数，与CSV输出%.7f一致
   bool coordsComplete = (snapshot.lat != 0.0 && snapshot.lon != 0.0);
   double currLat =
       coordsComplete ? round(snapshot.lat * 10000000.0) / 10000000.0 : 0.0;
@@ -236,7 +301,7 @@ bool StrokeDataManager::captureStroke(int currentStrokeCount) {
   if (pushed) {
     totalCaptured++;
   } else {
-    Serial.printf("[Stroke] ⚠️ 队列满！丢弃 #%d\n", snapshot.strokeNumber);
+    Serial.printf("[Stroke] 队列满！丢弃 #%d\n", snapshot.strokeNumber);
     totalLost++;
     queueFullCount++;
   }

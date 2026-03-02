@@ -12,9 +12,9 @@
             "type": "platformio-debug",
             "request": "launch",
             "name": "PIO Debug",
-            "executable": "D:/Desktop/project-rawing/platform/.pio/build/esp32-s3-devkitc-1/firmware.elf",
+            "executable": "d:/Dev/Projects/platform/.pio/build/esp32-s3-devkitc-1/firmware.elf",
             "projectEnvName": "esp32-s3-devkitc-1",
-            "toolchainBinDir": "C:/Users/yexu/.platformio/packages/toolchain-xtensa-esp32s3/bin",
+            "toolchainBinDir": "D:/Dev/caches/platformio/packages/toolchain-xtensa-esp32s3/bin",
             "internalConsoleOptions": "openOnSessionStart",
             "preLaunchTask": {
                 "type": "PlatformIO",
@@ -25,18 +25,18 @@
             "type": "platformio-debug",
             "request": "launch",
             "name": "PIO Debug (skip Pre-Debug)",
-            "executable": "D:/Desktop/project-rawing/platform/.pio/build/esp32-s3-devkitc-1/firmware.elf",
+            "executable": "d:/Dev/Projects/platform/.pio/build/esp32-s3-devkitc-1/firmware.elf",
             "projectEnvName": "esp32-s3-devkitc-1",
-            "toolchainBinDir": "C:/Users/yexu/.platformio/packages/toolchain-xtensa-esp32s3/bin",
+            "toolchainBinDir": "D:/Dev/caches/platformio/packages/toolchain-xtensa-esp32s3/bin",
             "internalConsoleOptions": "openOnSessionStart"
         },
         {
             "type": "platformio-debug",
             "request": "launch",
             "name": "PIO Debug (without uploading)",
-            "executable": "D:/Desktop/project-rawing/platform/.pio/build/esp32-s3-devkitc-1/firmware.elf",
+            "executable": "d:/Dev/Projects/platform/.pio/build/esp32-s3-devkitc-1/firmware.elf",
             "projectEnvName": "esp32-s3-devkitc-1",
-            "toolchainBinDir": "C:/Users/yexu/.platformio/packages/toolchain-xtensa-esp32s3/bin",
+            "toolchainBinDir": "D:/Dev/caches/platformio/packages/toolchain-xtensa-esp32s3/bin",
             "internalConsoleOptions": "openOnSessionStart",
             "loadMode": "manual"
         }

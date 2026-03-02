@@ -1,3 +1,3 @@
 {
-    "cmake.sourceDirectory": "D:/Desktop/project-rawing/platform/111/rowing-simulator"
+    "platformio.package_manager.url": "https://mirrors.tuna.tsinghua.edu.cn/platformio/package-manager/""cmake.sourceDirectory": "D:/Desktop/project-rawing/platform/111/rowing-simulator"
 }

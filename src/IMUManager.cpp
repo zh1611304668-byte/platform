@@ -265,8 +265,8 @@ void IMUManager::_calculateStrokeRate() {
               uint32_t interval = _peakMaxTime - _lastStrokeTime;
               float instantRate = 60000.0f / interval;
               if (_strokeRate > 0) {
-                _strokeRate =
-                    EMA_ALPHA * instantRate + (1 - EMA_ALPHA) * _strokeRate;
+                // 修改为直接使用瞬时桨频，不进行 EMA 平滑，记录绝对真实频率
+                _strokeRate = instantRate;
               } else {
                 _strokeRate = instantRate;
               }
