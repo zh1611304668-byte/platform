@@ -56,6 +56,10 @@ void ConfigManager::startConfigLoading() {
 
   // 如果平台地址为空,打印提示并返?,等待SETAPI命令
   if (platformHost.isEmpty() || platformPort == 0) {
+    // 即使没有平台地址，也尝试加载NVS缓存
+    if (!deviceConfig.isValid) {
+      loadConfigFromNVS();
+    }
     updateScreen4Display();
     return;
   }
@@ -72,6 +76,11 @@ void ConfigManager::startConfigLoading() {
   if (isConfigReady()) {
     Serial.println("[CONFIG] 配置已存在，跳过重复加载");
     return;
+  }
+
+  // 先尝试从NVS加载缓存配置（秒启动）
+  if (!deviceConfig.isValid) {
+    loadConfigFromNVS();
   }
 
   if (!loadAllConfigsInOneConnection()) {
@@ -1112,6 +1121,108 @@ void ConfigManager::savePlatformAddressToStorage() {
                 platformPort);
 }
 
+// ==================== NVS 配置缓存 ====================
+
+void ConfigManager::saveConfigToNVS() {
+  Preferences prefs;
+  prefs.begin("cfgcache", false); // 读写模式
+
+  // 保存 DeviceConfig
+  if (deviceConfig.isValid) {
+    prefs.putString("dc_tenant", deviceConfig.tenantCode);
+    prefs.putString("dc_boat", deviceConfig.boatCode);
+    prefs.putString("dc_name", deviceConfig.boatName);
+    prefs.putString("dc_stdId", deviceConfig.stdId);
+    prefs.putBool("dc_valid", true);
+  }
+
+  // 保存 MQTTConfig
+  if (mqttConfig.isValid) {
+    prefs.putString("mq_host", mqttConfig.host);
+    prefs.putUShort("mq_port", (uint16_t)mqttConfig.port);
+    prefs.putString("mq_user", mqttConfig.username);
+    prefs.putString("mq_pass", mqttConfig.password);
+    prefs.putBool("mq_clean", mqttConfig.cleanSession);
+    prefs.putUShort("mq_keepalive", (uint16_t)mqttConfig.keepAliveInterval);
+    prefs.putBool("mq_valid", true);
+  }
+
+  // 保存 RowerList（最多5个）
+  int count = min((int)rowerList.size(), 5);
+  prefs.putInt("rw_count", count);
+  for (int i = 0; i < count; i++) {
+    String prefix = "rw" + String(i) + "_";
+    prefs.putString((prefix + "id").c_str(), rowerList[i].rowerId);
+    prefs.putString((prefix + "name").c_str(), rowerList[i].rowerName);
+    prefs.putString((prefix + "dev").c_str(), rowerList[i].deviceCode);
+    prefs.putString((prefix + "bt").c_str(), rowerList[i].btAddr);
+  }
+
+  prefs.end();
+  Serial.printf("[CONFIG] ✅ 配置已缓存到NVS (设备=%d, MQTT=%d, 心率=%d)\n",
+                deviceConfig.isValid, mqttConfig.isValid, count);
+}
+
+void ConfigManager::loadConfigFromNVS() {
+  Preferences prefs;
+  prefs.begin("cfgcache", true); // 只读模式
+
+  // 读取 DeviceConfig
+  if (prefs.getBool("dc_valid", false)) {
+    deviceConfig.tenantCode = prefs.getString("dc_tenant", "");
+    deviceConfig.boatCode = prefs.getString("dc_boat", "");
+    deviceConfig.boatName = prefs.getString("dc_name", "");
+    deviceConfig.stdId = prefs.getString("dc_stdId", "");
+    deviceConfig.isValid = true;
+    deviceConfigStatus = CONFIG_SUCCESS;
+    Serial.printf("[CONFIG] 📦 NVS缓存: 设备 租户=%s 船只=%s\n",
+                  deviceConfig.tenantCode.c_str(),
+                  deviceConfig.boatCode.c_str());
+  }
+
+  // 读取 MQTTConfig
+  if (prefs.getBool("mq_valid", false)) {
+    mqttConfig.host = prefs.getString("mq_host", "");
+    mqttConfig.port = prefs.getUShort("mq_port", 1883);
+    mqttConfig.username = prefs.getString("mq_user", "");
+    mqttConfig.password = prefs.getString("mq_pass", "");
+    mqttConfig.cleanSession = prefs.getBool("mq_clean", true);
+    mqttConfig.keepAliveInterval = prefs.getUShort("mq_keepalive", 10);
+    mqttConfig.isValid = (mqttConfig.host.length() > 0 && mqttConfig.port > 0);
+    if (mqttConfig.isValid) {
+      mqttConfigStatus = CONFIG_SUCCESS;
+      Serial.printf("[CONFIG] 📦 NVS缓存: MQTT %s:%d\n",
+                    mqttConfig.host.c_str(), mqttConfig.port);
+    }
+  }
+
+  // 读取 RowerList
+  int count = prefs.getInt("rw_count", 0);
+  if (count > 0) {
+    rowerList.clear();
+    for (int i = 0; i < count; i++) {
+      String prefix = "rw" + String(i) + "_";
+      RowerInfo rower;
+      rower.rowerId = prefs.getString((prefix + "id").c_str(), "");
+      rower.rowerName = prefs.getString((prefix + "name").c_str(), "");
+      rower.deviceCode = prefs.getString((prefix + "dev").c_str(), "");
+      rower.btAddr = prefs.getString((prefix + "bt").c_str(), "");
+      rowerList.push_back(rower);
+    }
+    rowerListStatus = CONFIG_SUCCESS;
+    Serial.printf("[CONFIG] 📦 NVS缓存: 心率设备 %d 个\n", count);
+  }
+
+  prefs.end();
+
+  if (deviceConfig.isValid || mqttConfig.isValid) {
+    Serial.println("[CONFIG] ✅ NVS缓存加载完成，设备可立即使用");
+    updateScreen4Display();
+  } else {
+    Serial.println("[CONFIG] ℹ️ NVS无缓存，等待网络获取");
+  }
+}
+
 bool ConfigManager::setPlatformAddress(const String &address) {
 
   int colonPos = address.indexOf(':');
@@ -1330,6 +1441,8 @@ bool ConfigManager::loadAllConfigsInOneConnection() {
   updateScreen4Display();
 
   if (allSuccess && deviceConfig.isValid && mqttConfig.isValid) {
+    // API 获取成功，保存到 NVS 供下次快速启动
+    saveConfigToNVS();
     return true;
   } else {
     Serial.println("[CONFIG] ⚠️ 部分配置加载失败");

@@ -179,6 +179,18 @@ void SDCardManager::startNewTrainingFile(const String &trainId,
   strokeCsvPath = currentSessionFolder + "/strokes.csv";
   strokeCsvFile = SD_MMC.open(strokeCsvPath.c_str(), FILE_WRITE);
   if (strokeCsvFile && strokeCsvFile.position() == 0) {
+    // Session Information（模仿 SpeedCoach 格式）
+    const DeviceConfig &devCfg = configManager.getDeviceConfig();
+    String boatCode = devCfg.isValid ? devCfg.boatCode : "---";
+    strokeCsvFile.println("Session Information:");
+    strokeCsvFile.println();
+    strokeCsvFile.printf("BoatCode:,%s\n", boatCode.c_str());
+    strokeCsvFile.printf("Start Time:,%s\n", startTimestamp.c_str());
+    strokeCsvFile.println();
+    strokeCsvFile.println();
+    // Per-Stroke Data 标题和列头
+    strokeCsvFile.println("Per-Stroke Data:");
+    strokeCsvFile.println();
     strokeCsvFile.println(
         "BoatCode,StrokeLength(m),TotalDistance(m),ElapsedTime,Pace(/500m),"
         "Speed(m/s),StrokeRate(spm),StrokeCount,Lat,Lon,Timestamp");
@@ -453,6 +465,8 @@ void SDCardManager::closeCurrentFiles() {
     imuFile.close();
   }
   if (strokeCsvFile) {
+    // 训练结束时追加 Session Summary
+    appendSessionSummary();
     strokeCsvFile.flush();
     strokeCsvFile.close();
     strokeCsvFile = File();
@@ -598,4 +612,52 @@ void SDCardManager::imuLogTask(void *param) {
       lastDropPrint = xTaskGetTickCount();
     }
   }
+}
+
+// 训练结束时追加 Session Summary（模仿 SpeedCoach 格式）
+void SDCardManager::appendSessionSummary() {
+  if (!strokeCsvFile || stats.totalStrokes == 0) {
+    return;
+  }
+
+  // 计算平均值
+  float avgSpeed = (stats.speedSamples > 0)
+                       ? (float)(stats.sumSpeed / stats.speedSamples)
+                       : 0.0f;
+  float avgStrokeRate =
+      (stats.strokeRateSamples > 0)
+          ? (float)(stats.sumStrokeRate / stats.strokeRateSamples)
+          : 0.0f;
+  float avgStrokeLength =
+      (stats.strokeLengthSamples > 0)
+          ? (float)(stats.sumStrokeLength / stats.strokeLengthSamples)
+          : 0.0f;
+
+  // 格式化训练时长
+  String elapsed = formatHhmmssTenths(stats.durationMs);
+
+  // 格式化平均配速
+  String avgPace =
+      (avgSpeed > 0.05f) ? formatSplit(500.0f / avgSpeed) : String("--");
+
+  // 写入 Session Summary
+  strokeCsvFile.println();
+  strokeCsvFile.println();
+  strokeCsvFile.println("Session Summary:");
+  strokeCsvFile.println();
+  strokeCsvFile.println(
+      "TotalDistance(m),TotalElapsedTime,AvgPace(/500m),AvgSpeed(m/s),"
+      "AvgStrokeRate(spm),TotalStrokes,AvgStrokeLength(m),"
+      "StartLat,StartLon,EndLat,EndLon");
+
+  char line[256];
+  snprintf(line, sizeof(line),
+           "%.2f,%s,%s,%.2f,%.1f,%u,%.2f,%.7f,%.7f,%.7f,%.7f",
+           stats.lastDistance, elapsed.c_str(), avgPace.c_str(), avgSpeed,
+           avgStrokeRate, stats.totalStrokes, avgStrokeLength, stats.startLat,
+           stats.startLon, stats.endLat, stats.endLon);
+  strokeCsvFile.println(line);
+
+  Serial.printf("[SD] ✅ Session Summary written: %u strokes, %.1fm, %s\n",
+                stats.totalStrokes, stats.lastDistance, elapsed.c_str());
 }

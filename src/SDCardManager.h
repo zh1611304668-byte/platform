@@ -3,10 +3,10 @@
 
 #include "FS.h"
 #include "SD_MMC.h"
-#include <Arduino.h>
 #include "freertos/FreeRTOS.h"
 #include "freertos/queue.h"
 #include "freertos/task.h"
+#include <Arduino.h>
 
 struct StrokeSnapshot;
 
@@ -80,7 +80,7 @@ private:
   unsigned long lastFlushTime; // 上次flush时间
   static const unsigned long FLUSH_INTERVAL_MS = 500; // 每500ms刷新一次
   int trainingCounter;                                // 训练次数计数
-  long lastNmeaMs_;           // 最近一次含UTC的NMEA时间(ms, 当天)
+  long lastNmeaMs_; // 最近一次含UTC的NMEA时间(ms, 当天)
 
   // IMU异步写入
   QueueHandle_t imuQueue;
@@ -120,6 +120,7 @@ private:
   String formatHhmmssTenths(uint32_t milliseconds) const;
   String formatSplit(float seconds) const;
   void appendPerStrokeCsv(const StrokeSnapshot &snapshot);
+  void appendSessionSummary();
 };
 
 #endif
