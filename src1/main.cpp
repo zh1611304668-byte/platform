@@ -1,8 +1,13 @@
+﻿/*
+ * File: main.cpp
+ * Purpose: Application entry point and top-level task orchestration.
+ */
 #include "BluetoothManager.h"
 #include "BrightnessManager.h"
 #include "CellularManager.h"
 #include "ConfigManager.h"
 #include "DataFlowManager.h"
+#include "FirmwareVersion.h"
 #include "GNSSProcessor.h"
 #include "IMUManager.h"
 #include "MQTTManager.h"
@@ -126,19 +131,20 @@ float totalDistance = 0.0f;
 int panel1ContentIndex = 0;
 int panel8ContentIndex = 3;
 constexpr uint8_t DEBOUNCE_DELAY = 20;
-constexpr uint8_t KEY_QUEUE_SIZE = 16;
+constexpr uint8_t KEY_QUEUE_SIZE = 32;
 constexpr unsigned long GNSS_LABEL_UPDATE_INTERVAL_MS = 5000;
 
 struct KeyEvent {
   uint8_t pin;
   bool action;
+  uint32_t timestampMs;
 };
 
 QueueHandle_t keyQueue = nullptr;
 TaskHandle_t keyTaskHandle = nullptr;
 TaskHandle_t mqttTaskHandle = nullptr;
 
-// IMU数据记录已改为直接调用（带内部缓冲），无需队列和异步任务
+// IMU鏁版嵁璁板綍宸叉敼涓虹洿鎺ヨ皟鐢紙甯﹀唴閮ㄧ紦鍐诧級锛屾棤闇€闃熷垪鍜屽紓姝ヤ换鍔?
 
 static lv_obj_t *dot;
 
@@ -193,10 +199,12 @@ const unsigned long debounce_delay = 30;
 bool trainingActive = false;
 unsigned long k4PressTime = 0;
 bool k4ToggledThisPress = false;
-const unsigned long trainingLongPress = 1000;
+const unsigned long trainingLongPress = 2000;
+const unsigned long trainingDoubleClickWindow = 800;
+const unsigned long trainingTapMaxPress = 600;
+unsigned long k4LastTapTimeScreen1 = 0;
 bool k4PressedInScreen1 = false;
 bool k4IsPressed = false;
-unsigned long k4LastClickTime = 0;
 
 lv_group_t *group_screen2 = nullptr;
 lv_group_t *group_screen3 = nullptr;
@@ -252,8 +260,11 @@ void setup() {
   }
 
   Serial.begin(115200);
+  Serial.println();
+  Serial.printf("[FW] Version: %s\n", FIRMWARE_VERSION);
+  Serial.printf("[FW] Build: %s\n", FIRMWARE_BUILD_STAMP);
 
-  // 在系统初始化完成后再读取NVS中的平台地址
+  // 鍦ㄧ郴缁熷垵濮嬪寲瀹屾垚鍚庡啀璇诲彇NVS涓殑骞冲彴鍦板潃
   configManager.loadPlatformAddressFromStorage();
 
   esp_task_wdt_init(30, true);
@@ -283,7 +294,7 @@ void setup() {
   gfx->fillScreen(RGB565_BLACK);
 
 #ifdef GFX_BL
-  // 使用BrightnessManager初始化PWM控制，替代简单的开关控制
+  // 浣跨敤BrightnessManager鍒濆鍖朠WM鎺у埗锛屾浛浠ｇ畝鍗曠殑寮€鍏虫帶鍒?
   brightness.begin();
 #endif
 
@@ -339,7 +350,7 @@ void setup() {
   indev_drv.read_cb = my_touchpad_read;
   lv_indev_drv_register(&indev_drv);
 
-  Serial.println("[MAIN] 初始化PowerManager...");
+  Serial.println("[MAIN] 鍒濆鍖朠owerManager...");
   if (!powerMgr.begin()) {
     Serial.println("PowerManager initialization failed!");
   } else {
@@ -353,14 +364,14 @@ void setup() {
     if (datetime.getYear() >= 2024) {
       rtcTimeSynced = true;
     } else {
-      Serial.println("[RTC] 时间无效，等待网络同步...");
+      Serial.println("[RTC] 鏃堕棿鏃犳晥锛岀瓑寰呯綉缁滃悓姝?..");
     }
   } else {
-    Serial.println("[RTC] PCF85063初始化失败！检查接线");
+    Serial.println("[RTC] PCF85063 init failed; check wiring");
   }
 
   gnss.begin();
-  gnss.setSDCardManager(&sdCardManager); // 设置SD卡管理器用于记录NMEA数据
+  gnss.setSDCardManager(&sdCardManager); // 璁剧疆SD鍗＄鐞嗗櫒鐢ㄤ簬璁板綍NMEA鏁版嵁
   imu.begin();
   cellular.begin();
 
@@ -385,7 +396,7 @@ void setup() {
   BaseType_t networkTaskResult = xTaskCreatePinnedToCore(
       networkInitTask, "NetworkInit", 8192, NULL, 1, NULL, 1);
   if (networkTaskResult != pdPASS) {
-    Serial.println("[MAIN] ERROR: 网络任务创建失败！");
+    Serial.println("[MAIN] ERROR: failed to create network init task");
   }
 
   show_boot_animation();
@@ -416,7 +427,7 @@ void setup() {
     Serial.println("SD Card initialization failed.");
   }
 
-  // WiFi传输将在网络任务完成后启动（以使用船组编号）
+  // WiFi浼犺緭灏嗗湪缃戠粶浠诲姟瀹屾垚鍚庡惎鍔紙浠ヤ娇鐢ㄨ埞缁勭紪鍙凤級
 
   updatePanel1();
   updatePanel8();
@@ -446,11 +457,11 @@ void setup() {
     esp_restart();
   }
 
-  // IMU日志已改为直接写入（内部缓冲），不再需要队列和异步任务
+  // IMU鏃ュ織宸叉敼涓虹洿鎺ュ啓鍏ワ紙鍐呴儴缂撳啿锛夛紝涓嶅啀闇€瑕侀槦鍒楀拰寮傛浠诲姟
 
   optimizeTaskPriorities();
 
-  // WiFi将在网络任务完成后自动启动
+  // WiFi灏嗗湪缃戠粶浠诲姟瀹屾垚鍚庤嚜鍔ㄥ惎鍔?
 
   boot_auto_once_done = false;
   boot_auto_once_stage = 0;
@@ -469,7 +480,7 @@ void loop() {
   }
 
   static unsigned long lastSystemInteractionTime =
-      millis(); // 记录最后一次系统交互(按键/训练)时间
+      millis(); // 璁板綍鏈€鍚庝竴娆＄郴缁熶氦浜?鎸夐敭/璁粌)鏃堕棿
   unsigned long now = millis();
 
   // High frequency sensor update
@@ -479,7 +490,7 @@ void loop() {
   }
   esp_task_wdt_reset();
 
-  // 屏幕亮度管理更新 (每100ms检查一次)
+  // 灞忓箷浜害绠＄悊鏇存柊 (姣?00ms妫€鏌ヤ竴娆?
   static unsigned long lastBrightnessUpdate = 0;
   if (now - lastBrightnessUpdate > 100) {
     brightness.update(now, training.isActive(), lastSystemInteractionTime);
@@ -489,21 +500,21 @@ void loop() {
   static unsigned long lastLogTime = 0;
   static unsigned long lastSdStatusPrint = 0;
 
-  if (now - lastLogTime > 16) { // 16ms interval = 62.5Hz，与IMU采样率一致
+  if (now - lastLogTime > 16) { // 16ms interval = 62.5Hz锛屼笌IMU閲囨牱鐜囦竴鑷?
     lastLogTime = now;
 
-    // 即使RTC未同步，也记录IMU数据（使用millis）
+    // 鍗充娇RTC鏈悓姝ワ紝涔熻褰旾MU鏁版嵁锛堜娇鐢╩illis锛?
     if (training.isActive()) {
       float ax, ay, az;
       imu.getAcceleration(ax, ay, az);
 
-      // 使用now作为时间戳，确保记录的是采样时间而非写入时间
+      // 浣跨敤now浣滀负鏃堕棿鎴筹紝纭繚璁板綍鐨勬槸閲囨牱鏃堕棿鑰岄潪鍐欏叆鏃堕棿
       sdCardManager.logImuData(now, ax, ay, az);
     }
 
     if (sdCardManager.isDisabled() && (now - lastSdStatusPrint > 30000)) {
       lastSdStatusPrint = now;
-      Serial.println("[SD] ⚠️  SD card is disabled, data logging suspended");
+      Serial.println("[SD] 鈿狅笍  SD card is disabled, data logging suspended");
     }
   }
 
@@ -516,7 +527,7 @@ void loop() {
       bool anyDegraded = false;
 
       if (sdCardManager.isDisabled()) {
-        Serial.println("[系统]  SD卡已降级禁用，数据记录已暂停");
+        Serial.println("[绯荤粺]  SD鍗″凡闄嶇骇绂佺敤锛屾暟鎹褰曞凡鏆傚仠");
         anyDegraded = true;
       }
 
@@ -525,19 +536,19 @@ void loop() {
             (NETWORK_RETRY_RESET_INTERVAL - (now - networkRetryStartTime)) /
             1000;
         if (remaining > 0) {
-          Serial.printf("[系统] 🔻 网络降级中，还剩%lu秒\n", remaining);
+          Serial.printf("[绯荤粺] 馃敾 缃戠粶闄嶇骇涓紝杩樺墿%lu绉抃n", remaining);
           anyDegraded = true;
         } else {
           networkInitGracefullyDegraded = false;
           networkRetryCount = 0;
-          Serial.println("[系统] 🔄 网络降级期结束，可重新尝试");
+          Serial.println("[SYSTEM] Network degrade window ended; retry allowed");
         }
       }
 
       if (!anyDegraded) {
         static unsigned long lastHealthReport = 0;
         if (now - lastHealthReport > 300000) {
-          Serial.println("[系统] ✅ 系统运行正常，所有模块稳定");
+          Serial.println("[SYSTEM] Health check OK; all modules stable");
           lastHealthReport = now;
         }
       }
@@ -565,47 +576,47 @@ void loop() {
       String address = cmd.substring(7);
       address.trim();
 
-      Serial.println("\n[CMD] 收到地址更改请求: " + address);
+      Serial.println("\n[CMD] 鏀跺埌鍦板潃鏇存敼璇锋眰: " + address);
 
       if (configManager.getReloadPhase() != ConfigManager::RELOAD_IDLE) {
-        Serial.println("\n❌ 重载正在进行中，请稍后再试！\n");
+        Serial.println("\n鉂?閲嶈浇姝ｅ湪杩涜涓紝璇风◢鍚庡啀璇曪紒\n");
         return;
       }
 
-      // 检查当前是否处于"等待配置"状态（即Host为空）
+      // 妫€鏌ュ綋鍓嶆槸鍚﹀浜?绛夊緟閰嶇疆"鐘舵€侊紙鍗矵ost涓虹┖锛?
       bool isWaitingForConfig = configManager.getPlatformHost().isEmpty();
 
       if (isWaitingForConfig) {
-        // 初始设置，直接调用 setPlatformAddress
+        // 鍒濆璁剧疆锛岀洿鎺ヨ皟鐢?setPlatformAddress
         if (configManager.setPlatformAddress(address)) {
-          Serial.println("\n✅ 初始平台地址已设置，系统将自动开始加载配置\n");
+          Serial.println("\n鉁?鍒濆骞冲彴鍦板潃宸茶缃紝绯荤粺灏嗚嚜鍔ㄥ紑濮嬪姞杞介厤缃甛n");
         } else {
-          Serial.println("\n❌ 地址设置失败，请检查格式 (IP:PORT)\n");
+          Serial.println("\n鉂?鍦板潃璁剧疆澶辫触锛岃妫€鏌ユ牸寮?(IP:PORT)\n");
         }
         return;
       }
 
-      // 运行时重载
-      Serial.println("[CMD] 正在停止旧任务并重载地址...");
+      // 杩愯鏃堕噸杞?
+      Serial.println("[CMD] 姝ｅ湪鍋滄鏃т换鍔″苟閲嶈浇鍦板潃...");
 
       if (configManager.safeReloadPlatformAddress(address)) {
-        Serial.println("\n✅ 平台地址安全重载成功!");
-        Serial.println("系统已使用新地址重新获取配置\n");
+        Serial.println("\n鉁?骞冲彴鍦板潃瀹夊叏閲嶈浇鎴愬姛!");
+        Serial.println("绯荤粺宸蹭娇鐢ㄦ柊鍦板潃閲嶆柊鑾峰彇閰嶇疆\n");
       } else {
-        Serial.println("\n❌ 平台地址重载失败!");
-        Serial.println("原因：地址格式错误、资源释放超时或PPP拨号失败");
-        Serial.println("请检查后重试\n");
+        Serial.println("\n鉂?骞冲彴鍦板潃閲嶈浇澶辫触!");
+        Serial.println("鍘熷洜锛氬湴鍧€鏍煎紡閿欒銆佽祫婧愰噴鏀捐秴鏃舵垨PPP鎷ㄥ彿澶辫触");
+        Serial.println("璇锋鏌ュ悗閲嶈瘯\n");
       }
     } else if (cmd == "GETAPI") {
-      Serial.println("当前平台地址: " + configManager.getPlatformAddress());
+      Serial.println("褰撳墠骞冲彴鍦板潃: " + configManager.getPlatformAddress());
     } else if (cmd == "HELP" || cmd == "help") {
-      Serial.println("\n===== 串口命令帮助 =====");
+      Serial.println("\n===== 涓插彛鍛戒护甯姪 =====");
       Serial.println(
-          "SETAPI=<IP:PORT>  - 设置平台地址 (例: SETAPI=117.83.111.19:10033)");
+          "SETAPI=<IP:PORT>  - 璁剧疆骞冲彴鍦板潃 (渚? SETAPI=117.83.111.19:10033)");
       Serial.println("                    "
-                     "注：会自动停止MQTT/DataFlow，释放资源，重新拨号后恢复");
-      Serial.println("GETAPI            - 查询当前平台地址");
-      Serial.println("HELP              - 显示帮助信息");
+                     "Note: stops MQTT/DataFlow, releases resources, then redials");
+      Serial.println("GETAPI            - 鏌ヨ褰撳墠骞冲彴鍦板潃");
+      Serial.println("HELP              - 鏄剧ず甯姪淇℃伅");
       Serial.println("========================\n");
     }
   }
@@ -740,8 +751,9 @@ void loop() {
 
   KeyEvent event;
   while (xQueueReceive(keyQueue, &event, 0) == pdTRUE) {
-    lastSystemInteractionTime = now; // 按键重置计时器
-    brightness.resetInteraction();   // 立即恢复最高亮度
+    const unsigned long eventTime = event.timestampMs;
+    lastSystemInteractionTime = now; // 鎸夐敭閲嶇疆璁℃椂鍣?
+    brightness.resetInteraction();   // 绔嬪嵆鎭㈠鏈€楂樹寒搴?
     switch (event.pin) {
     case K1_PIN:
       if (event.action) {
@@ -863,41 +875,12 @@ void loop() {
 
     case K4_PIN:
       if (event.action) {
-        Serial.println("[DEBUG] K4 Pressed");
-        k4PressTime = now;
+        k4PressTime = eventTime;
         k4PressedInScreen1 = (safeGetCurrentScreen() == SCREEN1);
         k4IsPressed = true;
-
-        if (k4PressedInScreen1) {
-          if (k4LastClickTime > 0) {
-            unsigned long interval = now - k4LastClickTime;
-            Serial.printf("[DEBUG] Click interval: %lu ms\n", interval);
-            if (interval < 1500) {
-              if (!training.isActive()) {
-                training.start();
-                Serial.println("========================================");
-                Serial.println("✓ [训练模式] 双击触发 - 开始训练");
-                Serial.println("========================================");
-              } else {
-                training.stop();
-                Serial.println("========================================");
-                Serial.println("✓ [训练模式] 双击触发 - 停止训练");
-                Serial.println("========================================");
-              }
-              trainingActive = training.isActive();
-              k4ToggledThisPress = true;
-              k4LastClickTime = 0; // Reset
-            } else {
-              k4LastClickTime = now;
-            }
-          } else {
-            k4LastClickTime = now;
-          }
-        }
       } else {
-        Serial.println("[DEBUG] K4 Released");
         k4IsPressed = false;
-        unsigned long pressDuration = now - k4PressTime;
+        unsigned long pressDuration = eventTime - k4PressTime;
 
         if (k4PressTime == 0) {
           pressDuration = 0;
@@ -960,6 +943,26 @@ void loop() {
           case SCREEN1:
             break;
           }
+        } else if (k4PressedInScreen1 && pressDuration <= trainingTapMaxPress &&
+                   safeGetCurrentScreen() == SCREEN1) {
+          if (k4LastTapTimeScreen1 > 0 &&
+              (eventTime - k4LastTapTimeScreen1) <= trainingDoubleClickWindow) {
+            if (!training.isActive()) {
+              training.start();
+              Serial.println("========================================");
+              Serial.println("✅ [训练模式] 双击触发 - 开始训练");
+              Serial.println("========================================");
+            } else {
+              training.stop();
+              Serial.println("========================================");
+              Serial.println("✅ [训练模式] 双击触发 - 停止训练");
+              Serial.println("========================================");
+            }
+            trainingActive = training.isActive();
+            k4LastTapTimeScreen1 = 0;
+          } else {
+            k4LastTapTimeScreen1 = eventTime;
+          }
         }
 
         k4ToggledThisPress = false;
@@ -971,8 +974,10 @@ void loop() {
 
     lv_timer_handler();
   }
+  k4ToggledThisPress = false;
 
-  // 长按触发训练模式逻辑已替换为双击触发
+  if (!k4IsPressed && k4PressTime > 0) {
+  }
 
   static ScreenId lastScreen = SCREEN1;
   ScreenId currentScreen = safeGetCurrentScreen();
@@ -981,6 +986,7 @@ void loop() {
     k4PressedInScreen1 = false;
     k4ToggledThisPress = false;
     k4IsPressed = false;
+    k4LastTapTimeScreen1 = 0;
   }
 
   lastScreen = currentScreen;
@@ -1019,27 +1025,27 @@ void loop() {
     lastCellularProcess = now;
   }
 
-  // 检查是否有新划桨数据（事件驱动 - 立即更新，不受 100/200ms 限制）
+  // 妫€鏌ユ槸鍚︽湁鏂板垝妗ㄦ暟鎹紙浜嬩欢椹卞姩 - 绔嬪嵆鏇存柊锛屼笉鍙?100/200ms 闄愬埗锛?
   if (imu.hasNewStroke()) {
     const StrokeMetrics &metrics = imu.getLastStrokeMetrics();
 
-    // 更新桨数和桨频
+    // 鏇存柊妗ㄦ暟鍜屾〃棰?
     strokeRate = imu.getStrokeRate();
     strokeCount = metrics.strokeNumber;
     int currentStrokeCount = strokeCount;
     float currentSpeedMps = gnss.getSpeed();
 
-    // 触发训练逻辑和数据捕获（会计算距离并更新全局变量）
+    // 瑙﹀彂璁粌閫昏緫鍜屾暟鎹崟鑾凤紙浼氳绠楄窛绂诲苟鏇存柊鍏ㄥ眬鍙橀噺锛?
     training.onStrokeDetected();
     strokeDataMgr.captureStroke(currentStrokeCount);
 
-    // 现在strokeLength和totalDistance已被StrokeDataManager更新，可以用于UI显示
+    // 鐜板湪strokeLength鍜宼otalDistance宸茶StrokeDataManager鏇存柊锛屽彲浠ョ敤浜嶶I鏄剧ず
 
-    // 更新 ConfigManager
+    // 鏇存柊 ConfigManager
     configManager.safeUpdateSensorData(strokeRate, currentSpeedMps,
                                        currentStrokeCount, totalDistance);
 
-    // 更新 UI 显示
+    // 鏇存柊 UI 鏄剧ず
     char tmp[16];
     snprintf(tmp, sizeof(tmp), "%.1f", strokeRate);
     lv_label_set_text(ui_Label9, tmp);
@@ -1056,14 +1062,14 @@ void loop() {
     lv_label_set_text(ui_Label23, tmp);
     lv_label_set_text(ui_Label60, tmp);
 
-    // 立即刷新UI显示，减少延迟（事件驱动刷新）
+    // 绔嬪嵆鍒锋柊UI鏄剧ず锛屽噺灏戝欢杩燂紙浜嬩欢椹卞姩鍒锋柊锛?
     lv_timer_handler();
 
-    // 清除标志
+    // 娓呴櫎鏍囧織
     imu.clearNewStrokeFlag();
     lastStrokeCount = currentStrokeCount;
 
-    // 立即同步数据绑定
+    // 绔嬪嵆鍚屾鏁版嵁缁戝畾
     updateBoundData();
   }
 
@@ -1080,7 +1086,7 @@ void loop() {
                                     tempStrokeCount, tempTotalDistance);
     configManager.safeGetTimeData(displayLocalTime);
 
-    // 速度/功率/配速每秒刷新一次
+    // 閫熷害/鍔熺巼/閰嶉€熸瘡绉掑埛鏂颁竴娆?
     static uint32_t lastSpeedPowerPaceUpdate = 0;
     if (now - lastSpeedPowerPaceUpdate > 1000) {
       snprintf(tmp, sizeof(tmp), "%.1f", displaySpeedMps);
@@ -1155,7 +1161,7 @@ void loop() {
       }
     }
 
-    // 定期更新模式：仅更新衰减的桨频（如果有新划桨刚才已经更新过了）
+    // 瀹氭湡鏇存柊妯″紡锛氫粎鏇存柊琛板噺鐨勬〃棰戯紙濡傛灉鏈夋柊鍒掓〃鍒氭墠宸茬粡鏇存柊杩囦簡锛?
     float currentRate = imu.getStrokeRate();
     snprintf(tmp, sizeof(tmp), "%.1f", currentRate);
     lv_label_set_text(ui_Label9, tmp);
@@ -1188,8 +1194,8 @@ void loop() {
     try {
       safeLabelUpdate(ui_Label50, "0", "Label50(P1HR)");
       safeLabelUpdate(ui_Label4, "0", "Label4(P8HR)");
-      safeLabelUpdate(ui_Label14, "未选择", "Label14(NoDevice)");
-      safeLabelUpdate(ui_Label53, "未选择", "Label53(NoDevice)");
+      safeLabelUpdate(ui_Label14, "鏈€夋嫨", "Label14(NoDevice)");
+      safeLabelUpdate(ui_Label53, "鏈€夋嫨", "Label53(NoDevice)");
     } catch (...) {
       Serial.println("[MAIN] Error clearing HR labels");
     }
@@ -1505,7 +1511,7 @@ void loop() {
 
   static uint32_t lastRTCSync = 0;
   if (rtcInitialized && (now - lastRTCSync > 1800000)) {
-    Serial.println("[RTC] 执行定期时间同步...");
+    Serial.println("[RTC] 鎵ц瀹氭湡鏃堕棿鍚屾...");
     syncRTCWithCellular();
     lastRTCSync = now;
   }
@@ -1530,25 +1536,21 @@ void loop() {
     lastMinuteBatteryUIUpdate = now;
   }
 
-  if (xQueueReceive(keyQueue, &event, 0) == pdTRUE) {
-    lv_timer_handler();
-  }
-
   // ==========================================================================================
-  // 自动关机逻辑 (5分钟无操作且不在训练模式)
+  // 鑷姩鍏虫満閫昏緫 (5鍒嗛挓鏃犳搷浣滀笖涓嶅湪璁粌妯″紡)
   // ==========================================================================================
 
-  // 1. 如果在训练模式，不断重置计时器
+  // 1. 濡傛灉鍦ㄨ缁冩ā寮忥紝涓嶆柇閲嶇疆璁℃椂鍣?
   if (training.isActive()) {
     lastSystemInteractionTime = now;
   }
 
-  // 2. 如果K4正在被长按 (k4IsPressed)
+  // 2. 濡傛灉K4姝ｅ湪琚暱鎸?(k4IsPressed)
   if (k4IsPressed) {
     lastSystemInteractionTime = now;
   }
 
-  // 3. 触摸屏活跃时间 (LVGL自动维护)
+  // 3. 瑙︽懜灞忔椿璺冩椂闂?(LVGL鑷姩缁存姢)
   uint32_t touchInactiveTime = lv_disp_get_inactive_time(NULL);
 
   const unsigned long AUTO_SHUTDOWN_TIMEOUT = 300000;
@@ -1556,7 +1558,7 @@ void loop() {
   if ((now - lastSystemInteractionTime > AUTO_SHUTDOWN_TIMEOUT) &&
       (touchInactiveTime > AUTO_SHUTDOWN_TIMEOUT) && !training.isActive()) {
 
-    Serial.println("[System] 💤 自动关机触发 (5分钟无操作)");
+    Serial.println("[System] 馃挙 鑷姩鍏虫満瑙﹀彂 (5鍒嗛挓鏃犳搷浣?");
     powerMgr.shutdown();
   }
 
@@ -1573,35 +1575,35 @@ bool startMqttTaskIfReady(const char *sourceTag) {
   const char *tag = sourceTag ? sourceTag : "[NETWORK]";
 
   if (mqttTaskHandle != nullptr) {
-    Serial.printf("%s MQTT任务已在运行，跳过创建\n", tag);
+    Serial.printf("%s MQTT浠诲姟宸插湪杩愯锛岃烦杩囧垱寤篭n", tag);
     return true;
   }
 
   if (!configManager.isMQTTConfigReady()) {
-    Serial.printf("%s MQTT配置未就绪，无法启动MQTT任务\n", tag);
+    Serial.printf("%s MQTT閰嶇疆鏈氨缁紝鏃犳硶鍚姩MQTT浠诲姟\n", tag);
     return false;
   }
 
   const auto &mqttConfig = configManager.getMQTTConfig();
-  Serial.printf("%s 使用MQTT配置: %s:%d\n", tag, mqttConfig.host.c_str(),
+  Serial.printf("%s 浣跨敤MQTT閰嶇疆: %s:%d\n", tag, mqttConfig.host.c_str(),
                 mqttConfig.port);
 
   BaseType_t result = xTaskCreatePinnedToCore(mqttTask, "MQTTTask", 8192, NULL,
                                               1, &mqttTaskHandle, 1);
 
   if (result != pdPASS || !mqttTaskHandle) {
-    Serial.printf("%s ERROR: MQTT任务创建失败\n", tag);
+    Serial.printf("%s ERROR: MQTT浠诲姟鍒涘缓澶辫触\n", tag);
     mqttTaskHandle = nullptr;
     return false;
   }
 
-  Serial.printf("%s MQTT任务创建成功\n", tag);
+  Serial.printf("%s MQTT浠诲姟鍒涘缓鎴愬姛\n", tag);
   return true;
 }
 
 void networkInitTask(void *pvParameters) {
   if (networkInitGracefullyDegraded) {
-    Serial.println("[网络任务] 网络已优雅降级，跳过初始化");
+    Serial.println("[NETWORK] Degraded mode active, skip initialization");
     vTaskDelete(NULL);
     return;
   }
@@ -1623,14 +1625,14 @@ void networkInitTask(void *pvParameters) {
 
     taskStackHighWaterMark = uxTaskGetStackHighWaterMark(NULL);
     if (taskStackHighWaterMark < 1024) {
-      Serial.printf("[网络任务] WARNING: 栈空间不足: %u words\n",
+      Serial.printf("[缃戠粶浠诲姟] WARNING: 鏍堢┖闂翠笉瓒? %u words\n",
                     taskStackHighWaterMark);
     }
 
-    Serial.println("[网络任务] 网络初始化完成，配置已获取");
+    Serial.println("[NETWORK] Initialization complete; config loaded");
     esp_task_wdt_reset();
 
-    // 配置加载结果静默处理
+    // 閰嶇疆鍔犺浇缁撴灉闈欓粯澶勭悊
     esp_task_wdt_reset();
 
     if (configManager.isMQTTConfigReady()) {
@@ -1640,18 +1642,18 @@ void networkInitTask(void *pvParameters) {
                                                   NULL, 1, &mqttTaskHandle, 1);
 
       if (result != pdPASS || !mqttTaskHandle) {
-        Serial.println("[网络任务] ERROR: MQTT任务创建失败！");
+        Serial.println("[NETWORK] ERROR: failed to create MQTT task");
       }
     } else {
-      Serial.println("[网络任务] MQTT配置未就绪，跳过MQTT任务创建");
+      Serial.println("[缃戠粶浠诲姟] MQTT閰嶇疆鏈氨缁紝璺宠繃MQTT浠诲姟鍒涘缓");
     }
 
-    // 启动WiFi传输（此时配置已加载，可使用船组编号）
+    // 鍚姩WiFi浼犺緭锛堟鏃堕厤缃凡鍔犺浇锛屽彲浣跨敤鑸圭粍缂栧彿锛?
     if (!training.isActive() && !wifiTransfer.isActive()) {
       if (wifiTransfer.start()) {
-        Serial.println("[WiFi传输] ✅ 已自动启动（使用船组编号）");
+        Serial.println("[WiFi] Auto-started transfer mode (crew-id profile)");
       } else {
-        Serial.println("[WiFi传输] ❌ 启动失败");
+        Serial.println("[WiFi浼犺緭] 鉂?鍚姩澶辫触");
       }
     }
 
@@ -1659,7 +1661,7 @@ void networkInitTask(void *pvParameters) {
     esp_task_wdt_reset();
 
   } catch (...) {
-    Serial.println("[网络任务] EXCEPTION: 任务执行异常！");
+    Serial.println("[NETWORK] EXCEPTION: network task crashed");
     esp_task_wdt_reset();
     networkTaskCompleted = true;
 
@@ -1667,23 +1669,23 @@ void networkInitTask(void *pvParameters) {
     if (networkRetryCount >= MAX_NETWORK_RETRIES) {
       networkInitGracefullyDegraded = true;
       networkRetryStartTime = millis();
-      Serial.printf("[网络任务] 🔻 网络初始化失败，优雅降级%d分钟\n",
+      Serial.printf("[缃戠粶浠诲姟] 馃敾 缃戠粶鍒濆鍖栧け璐ワ紝浼橀泤闄嶇骇%d鍒嗛挓\n",
                     NETWORK_RETRY_RESET_INTERVAL / 60000);
     }
   }
 
   if (!configManager.isConfigReady()) {
-    Serial.println("[网络任务] API配置未完成");
+    Serial.println("[NETWORK] API config not ready");
     networkRetryCount++;
 
     if (networkRetryCount >= MAX_NETWORK_RETRIES) {
       networkInitGracefullyDegraded = true;
       networkRetryStartTime = millis();
-      Serial.printf("[网络任务] 🔻 网络配置失败，优雅降级%d分钟\n",
+      Serial.printf("[缃戠粶浠诲姟] 馃敾 缃戠粶閰嶇疆澶辫触锛屼紭闆呴檷绾?d鍒嗛挓\n",
                     NETWORK_RETRY_RESET_INTERVAL / 60000);
-      Serial.println("[网络任务] 系统将以离线模式运行，训练数据本地保存");
+      Serial.println("[NETWORK] Entering offline mode; training data stays local");
     } else {
-      Serial.printf("[网络任务] 将在%d分钟后重试网络初始化\n",
+      Serial.printf("[缃戠粶浠诲姟] 灏嗗湪%d鍒嗛挓鍚庨噸璇曠綉缁滃垵濮嬪寲\n",
                     (NETWORK_RETRY_RESET_INTERVAL / 60000) / 2);
     }
   } else {
@@ -1701,14 +1703,14 @@ void networkInitTask(void *pvParameters) {
 
 void syncRTCWithCellular() {
   if (!rtcInitialized) {
-    Serial.println("[RTC] RTC未初始化，跳过同步");
+    Serial.println("[RTC] RTC not initialized; skip sync");
     return;
   }
 
   String cellularTime = configManager.getCurrentFormattedDateTime();
   if (cellularTime.isEmpty() || cellularTime == "null" ||
       cellularTime.length() < 19) {
-    Serial.println("[RTC] 4G时间无效，跳过同步");
+    Serial.println("[RTC] 4G time invalid; skip sync");
     return;
   }
 
@@ -1722,7 +1724,7 @@ void syncRTCWithCellular() {
   if (year < 2024 || month < 1 || month > 12 || day < 1 || day > 31 ||
       hour < 0 || hour > 23 || minute < 0 || minute > 59 || second < 0 ||
       second > 59) {
-    Serial.println("[RTC] 时间格式无效，跳过同步");
+    Serial.println("[RTC] Invalid date-time format; skip sync");
     return;
   }
 
@@ -1732,11 +1734,11 @@ void syncRTCWithCellular() {
   RTC_DateTime verifyDateTime = rtc.getDateTime();
 
   if (verifyDateTime.getYear() < 2024) {
-    Serial.println("[RTC] ⚠️  RTC 时间设置失败，年份异常");
+    Serial.println("[RTC] RTC verify failed after sync");
     return;
   }
 
-  Serial.printf("[RTC] 同步完成: %04d-%02d-%02d %02d:%02d:%02d\n",
+  Serial.printf("[RTC] 鍚屾瀹屾垚: %04d-%02d-%02d %02d:%02d:%02d\n",
                 verifyDateTime.getYear(), verifyDateTime.getMonth(),
                 verifyDateTime.getDay(), verifyDateTime.getHour(),
                 verifyDateTime.getMinute(), verifyDateTime.getSecond());
@@ -1792,7 +1794,7 @@ void keyDetectionTask(void *pvParameters) {
           lastStates[i] = current;
           lastChange[i] = now;
 
-          KeyEvent event = {pins[i], current == LOW};
+          KeyEvent event = {pins[i], current == LOW, now};
           xQueueSend(keyQueue, &event, 0);
         }
       }
@@ -1801,3 +1803,7 @@ void keyDetectionTask(void *pvParameters) {
     vTaskDelay(5 / portTICK_PERIOD_MS);
   }
 }
+
+
+
+

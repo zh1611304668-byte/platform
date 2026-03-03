@@ -1,3 +1,7 @@
+/*
+ * File: GNSSProcessor.cpp
+ * Purpose: Implements runtime logic for the G N S S Processor module.
+ */
 #include "GNSSProcessor.h"
 #include "ConfigManager.h"
 #include "SDCardManager.h"
@@ -40,6 +44,13 @@ void GNSSProcessor::process() {
 void GNSSProcessor::setSDCardManager(SDCardManager *sd) { _sdCard = sd; }
 
 void GNSSProcessor::processNMEA(const String &nmea) {
+  // 调试：打印接收到的NMEA数据
+  static unsigned long lastDebugPrint = 0;
+  if (millis() - lastDebugPrint > 5000) { // 每5秒打印一次
+    Serial.printf("[GNSS] Received NMEA: %s\n", nmea.c_str());
+    lastDebugPrint = millis();
+  }
+
   // 记录原始 NMEA 数据到 SD 卡
   if (_sdCard != nullptr) {
     _sdCard->logNmeaRaw(nmea);
@@ -55,6 +66,8 @@ void GNSSProcessor::processNMEA(const String &nmea) {
     processVTG(nmea);
   } else if (nmea.startsWith("$GPGGA") || nmea.startsWith("$GNGGA")) {
     processGGA(nmea);
+  } else if (nmea.startsWith("$GPRMC") || nmea.startsWith("$GNRMC")) {
+    processRMC(nmea);
   }
 }
 
@@ -87,6 +100,7 @@ void GNSSProcessor::processGGA(const String &nmea) {
   String numSatUsedStr = parseNMEAField(nmea, 7);
   String hdopStr = parseNMEAField(nmea, 8);
   String diffAgeStr = parseNMEAField(nmea, 13);
+  String utcTimeStr = parseNMEAField(nmea, 1);
 
   // 首先检查定位质量和卫星数量
   int fixQuality = fixType.toInt();
@@ -159,6 +173,69 @@ void GNSSProcessor::processGGA(const String &nmea) {
   lastValidGNSS = millis();
 }
 
+
+void GNSSProcessor::processRMC(const String &nmea) {
+  String utcTimeStr = parseNMEAField(nmea, 1);
+  String status = parseNMEAField(nmea, 2);
+  String latStr = parseNMEAField(nmea, 3);
+  String latDir = parseNMEAField(nmea, 4);
+  String lonStr = parseNMEAField(nmea, 5);
+  String lonDir = parseNMEAField(nmea, 6);
+  String speedKnotsStr = parseNMEAField(nmea, 7);
+  String dateStr = parseNMEAField(nmea, 9);
+
+  if (utcTimeStr.length() >= 6 && dateStr.length() == 6) {
+    int day = dateStr.substring(0, 2).toInt();
+    int month = dateStr.substring(2, 4).toInt();
+    int year2 = dateStr.substring(4, 6).toInt();
+    int year = (year2 >= 80) ? (1900 + year2) : (2000 + year2);
+
+    int hour = utcTimeStr.substring(0, 2).toInt();
+    int minute = utcTimeStr.substring(2, 4).toInt();
+    int second = utcTimeStr.substring(4, 6).toInt();
+
+    if (year >= 2024 && month >= 1 && month <= 12 && day >= 1 && day <= 31 &&
+        hour >= 0 && hour < 24 && minute >= 0 && minute < 60 && second >= 0 &&
+        second < 60) {
+      _utcYear = year;
+      _utcMonth = month;
+      _utcDay = day;
+      _utcHour = hour;
+      _utcMinute = minute;
+      _utcSecond = second;
+      _utcSyncMillis = millis();
+      _utcValid = true;
+    }
+  }
+
+  if (!speedKnotsStr.isEmpty()) {
+    float speedFromRmc = speedKnotsStr.toFloat() * 0.514444f;
+    if (speedFromRmc >= 0.0f && speedFromRmc <= 50.0f) {
+      speedMps = speedFromRmc;
+    }
+  }
+
+  if (status == "A" && !latStr.isEmpty() && !lonStr.isEmpty() &&
+      !latDir.isEmpty() && !lonDir.isEmpty()) {
+    double lat = convertCoordinate(latStr, latDir);
+    double lon = convertCoordinate(lonStr, lonDir);
+    if (lat != 0.0 || lon != 0.0) {
+      latitude = lat;
+      longitude = lon;
+    }
+  }
+
+  if (utcTimeStr.length() >= 6 && _utcYear > 0) {
+    _utcHour = utcTimeStr.substring(0, 2).toInt();
+    _utcMinute = utcTimeStr.substring(2, 4).toInt();
+    _utcSecond = utcTimeStr.substring(4, 6).toInt();
+    _utcSyncMillis = millis();
+    _utcValid = true;
+  }
+
+  gnssActive = true;
+  lastValidGNSS = millis();
+}
 String GNSSProcessor::parseNMEAField(const String &s, uint8_t index) {
   uint8_t count = 0;
   int start = 0;
@@ -304,11 +381,115 @@ GNSSProcessor::getInterpolatedPosition(unsigned long target_timestamp) {
 
   return result;
 }
+
+bool GNSSProcessor::isLeapYear(int year) const {
+  return (year % 4 == 0 && year % 100 != 0) || (year % 400 == 0);
+}
+
+int GNSSProcessor::daysInMonth(int year, int month) const {
+  static const int kDays[] = {31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31};
+  if (month < 1 || month > 12) {
+    return 30;
+  }
+  if (month == 2 && isLeapYear(year)) {
+    return 29;
+  }
+  return kDays[month - 1];
+}
+
+void GNSSProcessor::adjustDateByDays(int &year, int &month, int &day,
+                                     int deltaDays) const {
+  while (deltaDays > 0) {
+    day++;
+    int dim = daysInMonth(year, month);
+    if (day > dim) {
+      day = 1;
+      month++;
+      if (month > 12) {
+        month = 1;
+        year++;
+      }
+    }
+    deltaDays--;
+  }
+
+  while (deltaDays < 0) {
+    day--;
+    if (day < 1) {
+      month--;
+      if (month < 1) {
+        month = 12;
+        year--;
+      }
+      day = daysInMonth(year, month);
+    }
+    deltaDays++;
+  }
+}
+
+String GNSSProcessor::getDateTimeString() const {
+  return getDateTimeStringForMillis(millis());
+}
+
+String GNSSProcessor::getDateTimeStringForMillis(unsigned long targetMillis) const {
+  if (!_utcValid || _utcYear < 2024) {
+    return "";
+  }
+
+  int year = _utcYear;
+  int month = _utcMonth;
+  int day = _utcDay;
+  int hour = _utcHour;
+  int minute = _utcMinute;
+  int second = _utcSecond;
+
+  int64_t deltaMs = (int64_t)(int32_t)(targetMillis - _utcSyncMillis);
+  int64_t deltaSec = deltaMs / 1000;
+  int64_t remMs = deltaMs % 1000;
+  if (remMs < 0) {
+    remMs += 1000;
+    deltaSec -= 1;
+  }
+
+  int64_t todSec = (int64_t)hour * 3600 + (int64_t)minute * 60 + second + deltaSec;
+  int dayDelta = 0;
+  while (todSec < 0) {
+    todSec += 86400;
+    dayDelta--;
+  }
+  while (todSec >= 86400) {
+    todSec -= 86400;
+    dayDelta++;
+  }
+  if (dayDelta != 0) {
+    adjustDateByDays(year, month, day, dayDelta);
+  }
+
+  hour = (int)(todSec / 3600);
+  minute = (int)((todSec % 3600) / 60);
+  second = (int)(todSec % 60);
+
+  char out[32];
+  snprintf(out, sizeof(out), "%04d-%02d-%02d %02d:%02d:%02d.%03d", year, month,
+           day, hour, minute, second, (int)remMs);
+  return String(out);
+}
 void GNSSProcessor::clearData() {
   speedMps = 0.0f;
   gnssActive = false;
   latitude = 0.0;
   longitude = 0.0;
+  _utcValid = false;
+  _utcYear = 0;
+  _utcMonth = 0;
+  _utcDay = 0;
+  _utcHour = 0;
+  _utcMinute = 0;
+  _utcSecond = 0;
+  _utcSyncMillis = 0;
+  // 不再设置默认值，让UI保持SquareLine Studio的默认值
+  // hdop, fixStatus, diffAge 等字符串字段不清空
+  // solvingSatellites, visibleSatellites 等计数字段不重置
   _history.clear(); // 清空历史数据
 }
 

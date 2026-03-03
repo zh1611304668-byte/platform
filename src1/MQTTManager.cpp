@@ -1,3 +1,7 @@
+/*
+ * File: MQTTManager.cpp
+ * Purpose: Implements runtime logic for the M Q T T Manager module.
+ */
 #include "MQTTManager.h"
 #include "BluetoothManager.h"
 #include "CellularManager.h"
@@ -21,6 +25,7 @@ static bool jsonBufferInitialized = false;
 
 static String lastValidTimestamp = "";
 static unsigned long lastValidTimeMillis = 0;
+extern GNSSProcessor gnss;
 
 class TaskWdtSuspendGuard {
 public:
@@ -65,8 +70,12 @@ String getValidTimestamp() {
   String currentTime;
   currentTime.reserve(24);
 
+  currentTime = gnss.getDateTimeString();
+
   if (rtcInitialized && rtcTimeSynced) {
-    currentTime = getRTCFullDateTime();
+    if (currentTime.isEmpty() || currentTime.length() < 19) {
+      currentTime = getRTCFullDateTime();
+    }
   }
 
   if (currentTime.isEmpty() || currentTime.length() < 19) {
@@ -264,7 +273,6 @@ extern float totalDistance;
 extern int strokeCount;
 extern float strokeLength;
 extern TrainingMode training;
-extern GNSSProcessor gnss;
 extern IMUManager imu;
 extern CellularManager cellular;
 extern PowerManager powerMgr;
@@ -1234,7 +1242,7 @@ void mqttTask(void *pvParameters) {
 
               StrokeSnapshot snapshot;
               int sentCount = 0;
-              const int maxBatchSize = 5;
+              const int maxBatchSize = 20;
 
               while (sentCount < maxBatchSize &&
                      strokeDataMgr.getNextStroke(snapshot)) {
@@ -1258,8 +1266,11 @@ void mqttTask(void *pvParameters) {
                   strokeDataMgr.markStrokeSent(snapshot.strokeNumber, success);
 
                   sentCount++;
-                  esp_task_wdt_reset();
-                  vTaskDelay(pdMS_TO_TICKS(10));
+
+                  if (sentCount % 5 == 0) {
+                    vTaskDelay(pdMS_TO_TICKS(10));
+                    esp_task_wdt_reset();
+                  }
                 } else {
 
                   strokeDataMgr.markStrokeSent(snapshot.strokeNumber, false);
@@ -1475,7 +1486,7 @@ bool publishHybridSocketMQTT(const String &topic, const String &payload,
   const char *tag = (qos > 0) ? "[MQTT-QoS1]" : "[MQTT]";
   {
     TaskWdtSuspendGuard wdtGuard(
-        (qos > 0) ? "Stroke publish" : "Hybrid publish", 1000);
+        (qos > 0) ? "Stroke publish" : "Hybrid publish", 2000);
     publishResult =
         hybridMqttClient->publish(topic.c_str(), payload.c_str(), false, qos);
   }

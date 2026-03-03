@@ -85,6 +85,47 @@ static String subtractMillisFromTimestamp(const String &timestamp,
   return String(buf);
 }
 
+// 向时间戳中加上指定毫秒数，用于单调递增保护
+static String addMillisToTimestamp(const String &timestamp,
+                                   unsigned long addMs) {
+  if (timestamp.length() < 19 || addMs == 0)
+    return timestamp;
+
+  int year = timestamp.substring(0, 4).toInt();
+  int month = timestamp.substring(5, 7).toInt();
+  int day = timestamp.substring(8, 10).toInt();
+  int hour = timestamp.substring(11, 13).toInt();
+  int minute = timestamp.substring(14, 16).toInt();
+  int second = timestamp.substring(17, 19).toInt();
+  int ms = 0;
+  if (timestamp.length() >= 23 && timestamp.charAt(19) == '.') {
+    ms = timestamp.substring(20, 23).toInt();
+  }
+
+  long totalMs = (long)ms + (long)addMs;
+  long totalSec = (long)hour * 3600 + (long)minute * 60 + (long)second;
+
+  // 处理毫秒进位
+  totalSec += totalMs / 1000;
+  totalMs = totalMs % 1000;
+
+  // 处理秒进位（跨天，极端情况）
+  if (totalSec >= 86400) {
+    totalSec -= 86400;
+    day++;
+    // 简化处理，实际不会跨天
+  }
+
+  hour = (int)(totalSec / 3600);
+  minute = (int)((totalSec % 3600) / 60);
+  second = (int)(totalSec % 60);
+
+  char buf[28];
+  snprintf(buf, sizeof(buf), "%04d-%02d-%02d %02d:%02d:%02d.%03ld", year, month,
+           day, hour, minute, second, totalMs);
+  return String(buf);
+}
+
 void normalizeStrokeSnapshot(StrokeSnapshot &snapshot) {
   if ((snapshot.lat == 0.0 && snapshot.lon == 0.0) && gnss.isValidFix()) {
     double latestLat = gnss.getLatitude();
@@ -166,6 +207,21 @@ bool StrokeDataManager::captureStroke(int currentStrokeCount) {
   // 获取当前准确时间戳
   snapshot.captureTime = getValidTimestamp();
 
+  // 单调递增保护：防止RTC秒/millis毫秒拼接导致时间戳倒退
+  static String s_prevCaptureTime = "";
+  if (!s_prevCaptureTime.isEmpty() && snapshot.captureTime.length() >= 23 &&
+      s_prevCaptureTime.length() >= 23) {
+    extern float calculateTimeDifference(const String &timestamp1,
+                                         const String &timestamp2);
+    float diff =
+        calculateTimeDifference(s_prevCaptureTime, snapshot.captureTime);
+    if (diff <= 0.0f) {
+      // 时间倒退或相同，强制+1ms
+      snapshot.captureTime = addMillisToTimestamp(s_prevCaptureTime, 1);
+      Serial.printf("[Stroke] ⚠️ 时间戳倒退修正: diff=%.3f -> 强制+1ms\n", diff);
+    }
+  }
+
   // ========== 核心修改：基于时间戳计算训练时长（毫秒精度）==========
   String startTS = training.getTrainingStartTimestamp();
   if (!startTS.isEmpty() && snapshot.captureTime.length() >= 19) {
@@ -217,8 +273,7 @@ bool StrokeDataManager::captureStroke(int currentStrokeCount) {
   snapshot.pace = (snapshot.speed > 0.05f) ? (500.0f / snapshot.speed) : 0.0f;
 
   // IMU数据 - 桨频从 captureTime 差值计算，确保与 Timestamp/ElapsedTime
-  // 完全对齐
-  static String s_prevCaptureTime = "";
+  // 完全对齐（复用上方的 s_prevCaptureTime）
   if (snapshot.strokeNumber == 1) {
     snapshot.strokeRate = 0.0f;
     s_prevCaptureTime = snapshot.captureTime;
@@ -228,7 +283,7 @@ bool StrokeDataManager::captureStroke(int currentStrokeCount) {
                                          const String &timestamp2);
     float interval =
         calculateTimeDifference(s_prevCaptureTime, snapshot.captureTime);
-    if (interval > 0.01f) {
+    if (interval > 0.001f) {
       snapshot.strokeRate = 60.0f / interval;
     } else {
       snapshot.strokeRate = strokeRate; // 回退到IMU桨频
