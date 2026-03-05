@@ -62,6 +62,16 @@ SensorPCF85063 rtc;
 SDCardManager sdCardManager;
 WifiTransferManager wifiTransfer;
 BrightnessManager brightness(GFX_BL, 0);
+unsigned long lastSystemInteractionTime = 0;
+volatile bool g_touchWakePending = false;
+
+bool consumeTouchWakePending() {
+  if (!g_touchWakePending) {
+    return false;
+  }
+  g_touchWakePending = false;
+  return true;
+}
 
 SemaphoreHandle_t serial4GMutex = nullptr;
 bool configLoadingInProgress = false;
@@ -80,6 +90,85 @@ struct MutexStats {
 };
 
 MutexStats mutexStats;
+struct LoopObservationStats {
+  unsigned long windowStartMs = 0;
+  unsigned long loopCount = 0;
+  unsigned long long totalLoopUs = 0;
+  unsigned long maxLoopUs = 0;
+  unsigned long trackedLogEvents = 0;
+  unsigned long uiPollHits = 0;
+  unsigned long batteryPollHits = 0;
+  unsigned long networkPollHits = 0;
+  unsigned long bluetoothPollHits = 0;
+  unsigned long bluetoothPollSkipHits = 0;
+  unsigned long slowLoopHits = 0;
+  unsigned long slowLoopScreen1Hits = 0;
+  unsigned long slowLoopScreen2Hits = 0;
+  unsigned long slowLoopScreen3Hits = 0;
+  unsigned long slowLoopScreen4Hits = 0;
+
+  unsigned long screen1SensorUiHits = 0;
+  unsigned long long screen1SensorUiTotalUs = 0;
+  unsigned long screen1SensorUiMaxUs = 0;
+  unsigned long screen1SensorUiSlowHits = 0;
+
+  unsigned long screen1TrainBindHits = 0;
+  unsigned long long screen1TrainBindTotalUs = 0;
+  unsigned long screen1TrainBindMaxUs = 0;
+  unsigned long screen1TrainBindSlowHits = 0;
+
+  unsigned long lvglTimerHits = 0;
+  unsigned long long lvglTimerTotalUs = 0;
+  unsigned long lvglTimerMaxUs = 0;
+  unsigned long lvglTimerSlowHits = 0;
+
+  unsigned long batteryUiHits = 0;
+  unsigned long long batteryUiTotalUs = 0;
+  unsigned long batteryUiMaxUs = 0;
+  unsigned long batteryUiSlowHits = 0;
+};
+
+LoopObservationStats loopObs;
+
+void resetLoopObservationWindow(unsigned long now) {
+  loopObs.windowStartMs = now;
+  loopObs.loopCount = 0;
+  loopObs.totalLoopUs = 0;
+  loopObs.maxLoopUs = 0;
+  loopObs.trackedLogEvents = 0;
+  loopObs.uiPollHits = 0;
+  loopObs.batteryPollHits = 0;
+  loopObs.networkPollHits = 0;
+  loopObs.bluetoothPollHits = 0;
+  loopObs.bluetoothPollSkipHits = 0;
+  loopObs.slowLoopHits = 0;
+  loopObs.slowLoopScreen1Hits = 0;
+  loopObs.slowLoopScreen2Hits = 0;
+  loopObs.slowLoopScreen3Hits = 0;
+  loopObs.slowLoopScreen4Hits = 0;
+
+  loopObs.screen1SensorUiHits = 0;
+  loopObs.screen1SensorUiTotalUs = 0;
+  loopObs.screen1SensorUiMaxUs = 0;
+  loopObs.screen1SensorUiSlowHits = 0;
+
+  loopObs.screen1TrainBindHits = 0;
+  loopObs.screen1TrainBindTotalUs = 0;
+  loopObs.screen1TrainBindMaxUs = 0;
+  loopObs.screen1TrainBindSlowHits = 0;
+
+  loopObs.lvglTimerHits = 0;
+  loopObs.lvglTimerTotalUs = 0;
+  loopObs.lvglTimerMaxUs = 0;
+  loopObs.lvglTimerSlowHits = 0;
+
+  loopObs.batteryUiHits = 0;
+  loopObs.batteryUiTotalUs = 0;
+  loopObs.batteryUiMaxUs = 0;
+  loopObs.batteryUiSlowHits = 0;
+}
+
+inline void noteTrackedLoopLog() { loopObs.trackedLogEvents++; }
 
 bool safeTakeMutex(SemaphoreHandle_t mutex, TickType_t timeout,
                    const char *mutexName) {
@@ -468,9 +557,14 @@ void loop() {
     loopWdtRegistered = true;
   }
 
-  static unsigned long lastSystemInteractionTime =
-      millis(); // 记录最后一次系统交互(按键/训练)时间
+  if (lastSystemInteractionTime == 0) {
+    lastSystemInteractionTime = millis();
+  }
   unsigned long now = millis();
+  unsigned long loopStartUs = micros();
+  if (loopObs.windowStartMs == 0) {
+    resetLoopObservationWindow(now);
+  }
 
   // High frequency sensor update
   imu.update();
@@ -503,6 +597,7 @@ void loop() {
 
     if (sdCardManager.isDisabled() && (now - lastSdStatusPrint > 30000)) {
       lastSdStatusPrint = now;
+      noteTrackedLoopLog();
       Serial.println("[SD] ⚠️  SD card is disabled, data logging suspended");
     }
   }
@@ -525,11 +620,13 @@ void loop() {
             (NETWORK_RETRY_RESET_INTERVAL - (now - networkRetryStartTime)) /
             1000;
         if (remaining > 0) {
+          noteTrackedLoopLog();
           Serial.printf("[系统] 🔻 网络降级中，还剩%lu秒\n", remaining);
           anyDegraded = true;
         } else {
           networkInitGracefullyDegraded = false;
           networkRetryCount = 0;
+          noteTrackedLoopLog();
           Serial.println("[系统] 🔄 网络降级期结束，可重新尝试");
         }
       }
@@ -537,6 +634,7 @@ void loop() {
       if (!anyDegraded) {
         static unsigned long lastHealthReport = 0;
         if (now - lastHealthReport > 300000) {
+          noteTrackedLoopLog();
           Serial.println("[系统] ✅ 系统运行正常，所有模块稳定");
           lastHealthReport = now;
         }
@@ -551,6 +649,7 @@ void loop() {
 
   if (networkTaskCompleted && !configManager.isConfigReady() &&
       (now - lastApiRetryTime > 10000) && !configLoadingInProgress) {
+    loopObs.networkPollHits++;
     configLoadingInProgress = true;
     configManager.startConfigLoading();
     configLoadingInProgress = false;
@@ -737,6 +836,11 @@ void loop() {
 
   wasInScreen2 = isInScreen2;
   wasInScreen3ForFocus = isInScreen3ForFocus;
+
+  if (consumeTouchWakePending()) {
+    lastSystemInteractionTime = now;
+    brightness.resetInteraction();
+  }
 
   KeyEvent event;
   while (xQueueReceive(keyQueue, &event, 0) == pdTRUE) {
@@ -1067,9 +1171,11 @@ void loop() {
     updateBoundData();
   }
 
-  uint32_t sensorUpdateInterval =
-      (safeGetCurrentScreen() == SCREEN3) ? 100 : 200;
+  ScreenId sensorScreen = safeGetCurrentScreen();
+  uint32_t sensorUpdateInterval = (sensorScreen == SCREEN3) ? 100 : 200;
   if (now - lastSensorUIUpdate > sensorUpdateInterval) {
+    loopObs.uiPollHits++;
+    unsigned long sensorUiStartUs = micros();
     char tmp[16];
 
     float displaySpeedMps = 0.0f;
@@ -1160,15 +1266,46 @@ void loop() {
     snprintf(tmp, sizeof(tmp), "%.1f", currentRate);
     lv_label_set_text(ui_Label9, tmp);
 
+    unsigned long trainBindStartUs = micros();
     training.update();
     updateBoundData();
+    unsigned long trainBindElapsedUs = micros() - trainBindStartUs;
+    if (sensorScreen == SCREEN1) {
+      loopObs.screen1TrainBindHits++;
+      loopObs.screen1TrainBindTotalUs += trainBindElapsedUs;
+      if (trainBindElapsedUs > loopObs.screen1TrainBindMaxUs) {
+        loopObs.screen1TrainBindMaxUs = trainBindElapsedUs;
+      }
+      if (trainBindElapsedUs >= 10000) {
+        loopObs.screen1TrainBindSlowHits++;
+      }
+    }
 
     lastSensorUIUpdate = now;
+
+    unsigned long sensorUiElapsedUs = micros() - sensorUiStartUs;
+    if (sensorScreen == SCREEN1) {
+      loopObs.screen1SensorUiHits++;
+      loopObs.screen1SensorUiTotalUs += sensorUiElapsedUs;
+      if (sensorUiElapsedUs > loopObs.screen1SensorUiMaxUs) {
+        loopObs.screen1SensorUiMaxUs = sensorUiElapsedUs;
+      }
+      if (sensorUiElapsedUs >= 10000) {
+        loopObs.screen1SensorUiSlowHits++;
+      }
+    }
   }
   static uint32_t lastHRUpdate = 0;
   auto activeDev = BT::activeDevice();
 
-  BT::pollUIEvents();
+  static uint32_t lastBluetoothUiPollMs = 0;
+  if (now - lastBluetoothUiPollMs >= 20) {
+    BT::pollUIEvents();
+    loopObs.bluetoothPollHits++;
+    lastBluetoothUiPollMs = now;
+  } else {
+    loopObs.bluetoothPollSkipHits++;
+  }
 
   if (activeDev && activeDev->connected && (now - lastHRUpdate) > 2000) {
     static char hrDisplayBuffer[16];
@@ -1180,6 +1317,7 @@ void loop() {
       safeLabelUpdate(ui_Label50, hrDisplayBuffer, "Label50(P1HR)");
       safeLabelUpdate(ui_Label4, hrDisplayBuffer, "Label4(P8HR)");
     } catch (...) {
+      noteTrackedLoopLog();
       Serial.println("[MAIN] Error updating HR labels");
     }
 
@@ -1191,6 +1329,7 @@ void loop() {
       safeLabelUpdate(ui_Label14, "未选择", "Label14(NoDevice)");
       safeLabelUpdate(ui_Label53, "未选择", "Label53(NoDevice)");
     } catch (...) {
+      noteTrackedLoopLog();
       Serial.println("[MAIN] Error clearing HR labels");
     }
     lastHRUpdate = now;
@@ -1250,6 +1389,7 @@ void loop() {
   static uint32_t lastUIRef = 0;
 
   if (safeGetCurrentScreen() == SCREEN3 && (now - lastUIRef) > 100) {
+    loopObs.uiPollHits++;
 
     if (screen3_enter_time == 0) {
       screen3_enter_time = now;
@@ -1486,7 +1626,17 @@ void loop() {
   }
 
   if (now - lastLVGLUpdate > refreshInterval) {
+    unsigned long lvglStartUs = micros();
     lv_timer_handler();
+    unsigned long lvglElapsedUs = micros() - lvglStartUs;
+    loopObs.lvglTimerHits++;
+    loopObs.lvglTimerTotalUs += lvglElapsedUs;
+    if (lvglElapsedUs > loopObs.lvglTimerMaxUs) {
+      loopObs.lvglTimerMaxUs = lvglElapsedUs;
+    }
+    if (lvglElapsedUs >= 10000) {
+      loopObs.lvglTimerSlowHits++;
+    }
     lastLVGLUpdate = now;
   }
 
@@ -1505,6 +1655,7 @@ void loop() {
 
   static uint32_t lastRTCSync = 0;
   if (rtcInitialized && (now - lastRTCSync > 1800000)) {
+    noteTrackedLoopLog();
     Serial.println("[RTC] 执行定期时间同步...");
     syncRTCWithCellular();
     lastRTCSync = now;
@@ -1512,8 +1663,19 @@ void loop() {
 
   static unsigned long lastBatteryUIUpdate = 0;
   if (millis() - lastBatteryUIUpdate >= 2000) {
+    loopObs.batteryPollHits++;
+    unsigned long batteryStartUs = micros();
     powerMgr.update();
     powerMgr.updateBatteryUI();
+    unsigned long batteryElapsedUs = micros() - batteryStartUs;
+    loopObs.batteryUiHits++;
+    loopObs.batteryUiTotalUs += batteryElapsedUs;
+    if (batteryElapsedUs > loopObs.batteryUiMaxUs) {
+      loopObs.batteryUiMaxUs = batteryElapsedUs;
+    }
+    if (batteryElapsedUs >= 10000) {
+      loopObs.batteryUiSlowHits++;
+    }
     lastBatteryUIUpdate = millis();
   }
 
@@ -1524,8 +1686,19 @@ void loop() {
 
   static uint32_t lastMinuteBatteryUIUpdate = 0;
   if (now - lastMinuteBatteryUIUpdate > 60000) {
+    loopObs.batteryPollHits++;
     if (safeGetCurrentScreen() == SCREEN1) {
+      unsigned long batteryStartUs = micros();
       powerMgr.updateBatteryUI();
+      unsigned long batteryElapsedUs = micros() - batteryStartUs;
+      loopObs.batteryUiHits++;
+      loopObs.batteryUiTotalUs += batteryElapsedUs;
+      if (batteryElapsedUs > loopObs.batteryUiMaxUs) {
+        loopObs.batteryUiMaxUs = batteryElapsedUs;
+      }
+      if (batteryElapsedUs >= 10000) {
+        loopObs.batteryUiSlowHits++;
+      }
     }
     lastMinuteBatteryUIUpdate = now;
   }
@@ -1556,8 +1729,71 @@ void loop() {
   if ((now - lastSystemInteractionTime > AUTO_SHUTDOWN_TIMEOUT) &&
       (touchInactiveTime > AUTO_SHUTDOWN_TIMEOUT) && !training.isActive()) {
 
+    noteTrackedLoopLog();
     Serial.println("[System] 💤 自动关机触发 (5分钟无操作)");
     powerMgr.shutdown();
+  }
+
+  unsigned long loopElapsedUs = micros() - loopStartUs;
+  loopObs.loopCount++;
+  loopObs.totalLoopUs += loopElapsedUs;
+  if (loopElapsedUs > loopObs.maxLoopUs) {
+    loopObs.maxLoopUs = loopElapsedUs;
+  }
+
+  if (loopElapsedUs >= 20000) {
+    loopObs.slowLoopHits++;
+    switch (safeGetCurrentScreen()) {
+    case SCREEN1:
+      loopObs.slowLoopScreen1Hits++;
+      break;
+    case SCREEN2:
+      loopObs.slowLoopScreen2Hits++;
+      break;
+    case SCREEN3:
+      loopObs.slowLoopScreen3Hits++;
+      break;
+    case SCREEN4:
+      loopObs.slowLoopScreen4Hits++;
+      break;
+    }
+  }
+
+  if (now - loopObs.windowStartMs >= 30000) {
+    float avgLoopUs = (loopObs.loopCount > 0)
+                          ? (float)loopObs.totalLoopUs / (float)loopObs.loopCount
+                          : 0.0f;
+    float s1SensorAvgUs = (loopObs.screen1SensorUiHits > 0)
+                              ? (float)loopObs.screen1SensorUiTotalUs /
+                                    (float)loopObs.screen1SensorUiHits
+                              : 0.0f;
+    float s1TrainBindAvgUs = (loopObs.screen1TrainBindHits > 0)
+                                 ? (float)loopObs.screen1TrainBindTotalUs /
+                                       (float)loopObs.screen1TrainBindHits
+                                 : 0.0f;
+    float lvglAvgUs = (loopObs.lvglTimerHits > 0)
+                          ? (float)loopObs.lvglTimerTotalUs /
+                                (float)loopObs.lvglTimerHits
+                          : 0.0f;
+    float batteryAvgUs = (loopObs.batteryUiHits > 0)
+                             ? (float)loopObs.batteryUiTotalUs /
+                                   (float)loopObs.batteryUiHits
+                             : 0.0f;
+    Serial.printf(
+        "[LOOP-STATS] window_ms=%lu loops=%lu avg_us=%.1f max_us=%lu logs=%lu ui_hits=%lu battery_hits=%lu network_hits=%lu bt_hits=%lu bt_skips=%lu slow_hits=%lu slow_s1=%lu slow_s2=%lu slow_s3=%lu slow_s4=%lu s1_ui_avg=%.1f s1_ui_max=%lu s1_ui_slow=%lu s1_tb_avg=%.1f s1_tb_max=%lu s1_tb_slow=%lu lvgl_avg=%.1f lvgl_max=%lu lvgl_slow=%lu bat_avg=%.1f bat_max=%lu bat_slow=%lu\n",
+        now - loopObs.windowStartMs, loopObs.loopCount, avgLoopUs,
+        loopObs.maxLoopUs, loopObs.trackedLogEvents, loopObs.uiPollHits,
+        loopObs.batteryPollHits, loopObs.networkPollHits,
+        loopObs.bluetoothPollHits, loopObs.bluetoothPollSkipHits,
+        loopObs.slowLoopHits, loopObs.slowLoopScreen1Hits,
+        loopObs.slowLoopScreen2Hits, loopObs.slowLoopScreen3Hits,
+        loopObs.slowLoopScreen4Hits, s1SensorAvgUs,
+        loopObs.screen1SensorUiMaxUs, loopObs.screen1SensorUiSlowHits,
+        s1TrainBindAvgUs, loopObs.screen1TrainBindMaxUs,
+        loopObs.screen1TrainBindSlowHits, lvglAvgUs,
+        loopObs.lvglTimerMaxUs, loopObs.lvglTimerSlowHits, batteryAvgUs,
+        loopObs.batteryUiMaxUs, loopObs.batteryUiSlowHits);
+    resetLoopObservationWindow(now);
   }
 
   delay(5);

@@ -265,7 +265,7 @@ void ConfigManager::configTask(void *pvParameters) {
 bool ConfigManager::parseDeviceConfigResponse(const String &json) {
   Serial.printf("[JSON-DEBUG] 收到设备配置JSON: %s\n", json.c_str());
 
-  StaticJsonDocument<1024> doc;
+  JsonDocument doc;
   DeserializationError error = deserializeJson(doc, json);
   if (error) {
     Serial.printf("[JSON-DEBUG] JSON解析失败: %s\n", error.c_str());
@@ -293,7 +293,7 @@ bool ConfigManager::parseDeviceConfigResponse(const String &json) {
 bool ConfigManager::parseMQTTConfigResponse(const String &json) {
   Serial.printf("[JSON-DEBUG] 收到MQTT配置JSON: %s\n", json.c_str());
 
-  StaticJsonDocument<2048> doc;
+  JsonDocument doc;
   DeserializationError error = deserializeJson(doc, json);
   if (error) {
     Serial.printf("[JSON-DEBUG] MQTT JSON解析失败: %s\n", error.c_str());
@@ -346,7 +346,7 @@ bool ConfigManager::parseRowerListResponse(const String &json) {
     return false;
   }
 
-  DynamicJsonDocument doc(24576);
+  JsonDocument doc;
   DeserializationError error = deserializeJson(doc, json);
   if (error) {
     Serial.printf("[JSON-DEBUG] 心率设备JSON解析失败: %s\n", error.c_str());

@@ -1,3 +1,0 @@
-D:/Desktop/project-rawing/platform/111/lvgl-demo/build/CMakeFiles/lvgl-demo.dir
-D:/Desktop/project-rawing/platform/111/lvgl-demo/build/CMakeFiles/edit_cache.dir
-D:/Desktop/project-rawing/platform/111/lvgl-demo/build/CMakeFiles/rebuild_cache.dir

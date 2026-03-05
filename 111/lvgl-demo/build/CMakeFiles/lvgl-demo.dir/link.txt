@@ -1,3 +1,0 @@
-C:\Qt\Tools\CMake_64\bin\cmake.exe -E rm -f CMakeFiles\lvgl-demo.dir/objects.a
-C:\Qt\Tools\mingw1310_64\bin\ar.exe qc CMakeFiles\lvgl-demo.dir/objects.a @CMakeFiles\lvgl-demo.dir\objects1.rsp
-C:\Qt\Tools\mingw1310_64\bin\gcc.exe -mwindows -Wl,--whole-archive CMakeFiles\lvgl-demo.dir/objects.a -Wl,--no-whole-archive -o lvgl-demo.exe -Wl,--out-implib,liblvgl-demo.dll.a -Wl,--major-image-version,0,--minor-image-version,0 @CMakeFiles\lvgl-demo.dir\linkLibs.rsp

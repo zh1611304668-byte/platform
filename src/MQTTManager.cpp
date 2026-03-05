@@ -527,7 +527,7 @@ String generateStrokeJSON(StrokeSnapshot snapshot) {
   reusableJsonBuffer += ",\"distance\":";
   reusableJsonBuffer += String(snapshot.totalDistance, 2);
   reusableJsonBuffer += ",\"td\":";
-  reusableJsonBuffer += String(snapshot.elapsedSeconds, 1);
+  reusableJsonBuffer += String(snapshot.elapsedSeconds, 3);
   reusableJsonBuffer += "}";
 
   return reusableJsonBuffer;

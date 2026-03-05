@@ -1,5 +1,6 @@
 #include "UIManager.h"
 #include "BluetoothManager.h"
+#include "BrightnessManager.h"
 #include "ConfigManager.h"
 #include "TCA9554.h"
 #include "TouchDrvFT6X36.hpp"
@@ -548,20 +549,33 @@ void my_disp_flush(lv_disp_drv_t* disp, const lv_area_t* area, lv_color_t* color
 
 // ===================== LVGL 触摸读取回调 =====================
 void my_touchpad_read(lv_indev_drv_t *indev_drv, lv_indev_data_t *data) {
+  (void)indev_drv;
+  static bool swallowUntilRelease = false;
+
   int16_t x[1], y[1];
   uint8_t touched = touch.getPoint(x, y, 1);
 
   if (touched) {
+    bool isDimmed = (brightness.getCurrentBrightness() < BRIGHTNESS_FULL);
+
+    // Dark-screen first touch only wakes the backlight and is not passed to UI.
+    if (swallowUntilRelease || isDimmed) {
+      g_touchWakePending = true;
+      swallowUntilRelease = true;
+      data->state = LV_INDEV_STATE_REL;
+      return;
+    }
+
     data->state = LV_INDEV_STATE_PR;
-    
-    // 坐标变换以匹配显示旋转
+
     int16_t mapped_x = screenWidth - y[0];
     int16_t mapped_y = x[0];
-    
+
     data->point.x = mapped_x;
     data->point.y = mapped_y;
   } else {
     data->state = LV_INDEV_STATE_REL;
+    swallowUntilRelease = false;
   }
 }
 

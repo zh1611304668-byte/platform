@@ -278,7 +278,7 @@ bool DataFlowManager::validateDataPacket(const DataPacket &packet) {
   }
 
   if (packet.type != DATA_CONFIG) {
-    DynamicJsonDocument doc(1024);
+    JsonDocument doc;
     DeserializationError error = deserializeJson(doc, packet.payload);
     if (error) {
       Serial.printf("[DataFlow] JSON验证失败: %s\n", error.c_str());

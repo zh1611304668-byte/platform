@@ -182,10 +182,21 @@ void SDCardManager::startNewTrainingFile(const String &trainId,
     // Session Information（模仿 SpeedCoach 格式）
     const DeviceConfig &devCfg = configManager.getDeviceConfig();
     String boatCode = devCfg.isValid ? devCfg.boatCode : "---";
-    strokeCsvFile.println("Session Information:");
+    String boatName = devCfg.isValid ? devCfg.boatName : "---";
+    String tenantCode = devCfg.isValid ? devCfg.tenantCode : "---";
+    String imei = configManager.getDeviceIMEI();
+    if (imei.isEmpty())
+      imei = "---";
+
+    strokeCsvFile.println("Session Information:,,,,Device Information:");
     strokeCsvFile.println();
-    strokeCsvFile.printf("BoatCode:,%s\n", boatCode.c_str());
-    strokeCsvFile.printf("Start Time:,%s\n", startTimestamp.c_str());
+    strokeCsvFile.printf("Name:,%s,,,Device Code:,%s\n", boatName.c_str(),
+                         imei.c_str());
+    strokeCsvFile.printf("Start Time:,%s,,,Boat Code:,%s\n",
+                         startTimestamp.c_str(), boatCode.c_str());
+    strokeCsvFile.printf("System of Units:,Meters/Speed,,,Tenant:,%s\n",
+                         tenantCode.c_str());
+    strokeCsvFile.println("Speed Input:,GPS,,,Firmware:,1.0.0");
     strokeCsvFile.println();
     strokeCsvFile.println();
     // Per-Stroke Data 标题和列头
@@ -193,7 +204,12 @@ void SDCardManager::startNewTrainingFile(const String &trainId,
     strokeCsvFile.println();
     strokeCsvFile.println(
         "BoatCode,StrokeLength(m),TotalDistance(m),ElapsedTime,Pace(/500m),"
-        "Speed(m/s),StrokeRate(spm),StrokeCount,Lat,Lon,Timestamp");
+        "Speed(m/s),StrokeRate(spm),Power(W),StrokeCount,Lat,Lon,Timestamp,"
+        "ET_Diff(s),TS_Diff(s),60/StrokeRate(s)");
+    strokeCsvFile.println(
+        "(Code),(Meters),(Meters),(Seconds),(/500),(M/"
+        "S),(SPM),(Watts),(Strokes),"
+        "(Degrees),(Degrees),(DateTime),(Seconds),(Seconds),(Seconds)");
     strokeCsvFile.flush();
     Serial.println("[SD] ✅ Stroke CSV header written");
   }
@@ -308,30 +324,94 @@ String SDCardManager::formatSplit(float seconds) const {
   return String(buffer);
 }
 
+// 从 Timestamp 字符串提取总秒数（分钟*60 + 秒.毫秒），用于计算 TS Diff
+static float parseTimestampSeconds(const String &ts) {
+  // 格式: "2026-03-04 16:42:36.856"
+  int lastColon = ts.lastIndexOf(':');
+  if (lastColon < 0)
+    return 0.0f;
+  int prevColon = ts.lastIndexOf(':', lastColon - 1);
+  if (prevColon < 0)
+    return 0.0f;
+  int minute = ts.substring(prevColon + 1, lastColon).toInt();
+  float sec = ts.substring(lastColon + 1).toFloat();
+  return minute * 60.0f + sec;
+}
+
 void SDCardManager::appendPerStrokeCsv(const StrokeSnapshot &snapshot) {
   if (!strokeCsvFile) {
     return;
   }
 
-  // 训练时长直接输出为秒数格式（保留1位小数），例如: 29.1
-  String elapsed = String(snapshot.elapsedSeconds, 1);
+  // 用 static 变量记住上一桨的数据，用于计算 Diff 和累加时间
+  static float prevElapsed = 0.0f;
+  static float prevTsSec = 0.0f;
+  static float accumulatedElapsedFromTs = 0.0f;
+  static bool hasPrev = false;
+
+  // 第一桨时重置
+  if (snapshot.strokeNumber <= 1) {
+    hasPrev = false;
+    accumulatedElapsedFromTs = 0.0f;
+  }
+
+  // Timestamp 保留完整3位小数（毫秒精度），与 ElapsedTime 精度一致
+  String tsOut = snapshot.captureTime; // 格式已是 "2026-03-03 15:58:21.639"
+
+  // 计算三列分析数据
+  float curTsSec = parseTimestampSeconds(tsOut);
+  String etDiffStr = "-";
+  String tsDiffStr = "-";
+  String srIntervalStr = "-";
+
+  if (hasPrev) {
+    float etDiffOrigin = snapshot.elapsedSeconds - prevElapsed;
+    float tsDiff = curTsSec - prevTsSec;
+    // 处理跨分钟边界（例如 59.9 → 0.1，差值变成负数）
+    if (tsDiff < -30.0f)
+      tsDiff += 3600.0f; // 跨小时
+    if (tsDiff < 0.0f)
+      tsDiff += 60.0f; // 跨分钟
+
+    accumulatedElapsedFromTs += tsDiff;
+
+    etDiffStr = String(etDiffOrigin, 3);
+    tsDiffStr = String(tsDiff, 3);
+
+    if (snapshot.strokeRate > 0.01f) {
+      float csvStrokeRate = roundf(snapshot.strokeRate * 10.0f) / 10.0f;
+      srIntervalStr = String(60.0f / csvStrokeRate, 3);
+    }
+  } else {
+    // 第一桨时确保累计时间为0
+    accumulatedElapsedFromTs = 0.0f;
+  }
+
+  // 训练时长：改为基于时间戳的差值累加结果
+  String elapsed = String(accumulatedElapsedFromTs, 3);
 
   // 【调试】打印CSV输出的td值
-  Serial.printf("[CSV] 桨次%d，elapsedSeconds=%.3f → CSV输出=%s\n",
-                snapshot.strokeNumber, snapshot.elapsedSeconds,
-                elapsed.c_str());
+  Serial.printf(
+      "[CSV] 桨次%d，原始elapsedSeconds=%.3f → 基于时间戳累加CSV输出=%s\n",
+      snapshot.strokeNumber, snapshot.elapsedSeconds, elapsed.c_str());
 
   // 四舍五入到2位小数，与CSV中 %.2f 格式保持一致，确保配速与速度字段对齐
   float roundedSpeed = roundf(snapshot.speed * 100.0f) / 100.0f;
   String split = (roundedSpeed > 0.05f) ? formatSplit(500.0f / roundedSpeed)
                                         : String("--");
 
-  char line[512];
-  snprintf(line, sizeof(line), "%s,%.2f,%.2f,%s,%s,%.2f,%.1f,%d,%.7f,%.7f,%s",
+  prevElapsed = snapshot.elapsedSeconds;
+  prevTsSec = curTsSec;
+  hasPrev = true;
+
+  char line[640];
+  snprintf(line, sizeof(line),
+           "%s,%.2f,%.2f,%s,%s,%.2f,%.1f,%.1f,%d,%.7f,%.7f,%s,%s,%s,%s",
            snapshot.boatCode.c_str(), snapshot.strokeLength,
            snapshot.totalDistance, elapsed.c_str(), split.c_str(), roundedSpeed,
-           snapshot.strokeRate, snapshot.strokeNumber, snapshot.lat,
-           snapshot.lon, snapshot.captureTime.c_str());
+           snapshot.strokeRate, snapshot.power, snapshot.strokeNumber,
+           snapshot.lat, snapshot.lon, tsOut.c_str(), etDiffStr.c_str(),
+           tsDiffStr.c_str(), srIntervalStr.c_str());
   strokeCsvFile.println(line);
 }
 

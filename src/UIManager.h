@@ -5,6 +5,8 @@
 #include <Arduino_GFX_Library.h>
 #include <ui.h>
 
+class BrightnessManager;
+
 // ===================== 屏幕枚举 =====================
 enum ScreenId { SCREEN1, SCREEN2, SCREEN3, SCREEN4 };
 
@@ -15,6 +17,10 @@ extern volatile ScreenId current_screen;
 extern int screen2_focus_idx;
 extern int screen2_remembered_focus_idx;
 extern int screen3_selected_idx;
+extern BrightnessManager brightness;
+extern volatile bool g_touchWakePending;
+
+bool consumeTouchWakePending();
 
 // ===================== 函数声明 =====================
 
