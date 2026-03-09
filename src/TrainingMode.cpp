@@ -15,6 +15,15 @@ extern StrokeDataManager strokeDataMgr;
 extern WifiTransferManager wifiTransfer;
 
 void TrainingMode::start() {
+  // 立即显示UI反馈，让用户感知到操作已响应
+  if (imageIndicator) {
+    lv_obj_clear_flag(imageIndicator, LV_OBJ_FLAG_HIDDEN);
+  }
+  if (timeLabel) {
+    lv_label_set_text(timeLabel, "00:00");
+  }
+  lv_timer_handler(); // 立即刷新一帧
+
   // 【关键】启动训练前关闭WiFi传输模式
   if (wifiTransfer.isActive()) {
     wifiTransfer.stop();
@@ -52,17 +61,23 @@ void TrainingMode::start() {
   // 训练开始时重置所有训练数据
   resetTrainingData();
 
+  Serial.println("[训练模式] ✅ 配置就绪，训练模式已启动");
+}
+
+void TrainingMode::stop() {
+  // 立即隐藏UI反馈，让用户第一时间感知到停止操作
   if (imageIndicator) {
-    lv_obj_clear_flag(imageIndicator, LV_OBJ_FLAG_HIDDEN);
+    lv_obj_add_flag(imageIndicator, LV_OBJ_FLAG_HIDDEN);
   }
   if (timeLabel) {
     lv_label_set_text(timeLabel, "00:00");
   }
 
-  Serial.println("[训练模式] ✅ 配置就绪，训练模式已启动");
-}
+  // 清空屏幕训练数据
+  clearScreenData();
 
-void TrainingMode::stop() {
+  lv_timer_handler(); // 立即刷新一帧以使隐藏和清空生效
+
   active = false;
   running = false;
 
@@ -74,16 +89,6 @@ void TrainingMode::stop() {
   trainId = "";
   trainingStartTimestamp = ""; // 清空训练开始时间戳
   totalPausedSeconds = 0;      // 重置累计暂停秒数
-
-  if (imageIndicator) {
-    lv_obj_add_flag(imageIndicator, LV_OBJ_FLAG_HIDDEN);
-  }
-  if (timeLabel) {
-    lv_label_set_text(timeLabel, "00:00");
-  }
-
-  // 清空屏幕训练数据
-  clearScreenData();
 
   // 重置全局训练数据变量
   resetTrainingData();

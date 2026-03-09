@@ -214,7 +214,7 @@ float totalDistance = 0.0f;
 
 int panel1ContentIndex = 0;
 int panel8ContentIndex = 3;
-constexpr uint8_t DEBOUNCE_DELAY = 20;
+constexpr uint8_t DEBOUNCE_DELAY = 50;
 constexpr uint8_t KEY_QUEUE_SIZE = 16;
 constexpr unsigned long GNSS_LABEL_UPDATE_INTERVAL_MS = 5000;
 
@@ -286,6 +286,7 @@ const unsigned long trainingLongPress = 1000;
 bool k4PressedInScreen1 = false;
 bool k4IsPressed = false;
 unsigned long k4LastClickTime = 0;
+unsigned long k4TrainingToggleTime = 0;  // 训练切换冷却时间戳
 
 lv_group_t *group_screen2 = nullptr;
 lv_group_t *group_screen3 = nullptr;
@@ -971,12 +972,22 @@ void loop() {
         k4PressTime = now;
         k4PressedInScreen1 = (safeGetCurrentScreen() == SCREEN1);
         k4IsPressed = true;
+      } else {
+        Serial.println("[DEBUG] K4 Released");
+        k4IsPressed = false;
+        unsigned long pressDuration = now - k4PressTime;
 
-        if (k4PressedInScreen1) {
-          if (k4LastClickTime > 0) {
-            unsigned long interval = now - k4LastClickTime;
-            Serial.printf("[DEBUG] Click interval: %lu ms\n", interval);
-            if (interval < 1500) {
+        if (k4PressTime == 0) {
+          pressDuration = 0;
+        } else if (pressDuration > 60000) {
+          pressDuration = 0;
+        }
+
+        // 释放时判定双击（仅在SCREEN1，短按30~400ms，窗口600ms，冷却1200ms）
+        if (k4PressedInScreen1 && pressDuration >= 30 && pressDuration <= 400) {
+          if (k4TrainingToggleTime == 0 || (now - k4TrainingToggleTime > 1200)) {
+            if (k4LastClickTime > 0 && (now - k4LastClickTime) < 600) {
+              Serial.printf("[DEBUG] Double-click interval: %lu ms\n", now - k4LastClickTime);
               if (!training.isActive()) {
                 training.start();
                 Serial.println("========================================");
@@ -990,23 +1001,12 @@ void loop() {
               }
               trainingActive = training.isActive();
               k4ToggledThisPress = true;
-              k4LastClickTime = 0; // Reset
+              k4LastClickTime = 0;
+              k4TrainingToggleTime = now;
             } else {
               k4LastClickTime = now;
             }
-          } else {
-            k4LastClickTime = now;
           }
-        }
-      } else {
-        Serial.println("[DEBUG] K4 Released");
-        k4IsPressed = false;
-        unsigned long pressDuration = now - k4PressTime;
-
-        if (k4PressTime == 0) {
-          pressDuration = 0;
-        } else if (pressDuration > 60000) {
-          pressDuration = 0;
         }
 
         if (!k4PressedInScreen1 && !k4ToggledThisPress &&
@@ -1085,6 +1085,7 @@ void loop() {
     k4PressedInScreen1 = false;
     k4ToggledThisPress = false;
     k4IsPressed = false;
+    k4LastClickTime = 0;  // 离开SCREEN1清空首击，避免跨页残留
   }
 
   lastScreen = currentScreen;
@@ -1703,9 +1704,7 @@ void loop() {
     lastMinuteBatteryUIUpdate = now;
   }
 
-  if (xQueueReceive(keyQueue, &event, 0) == pdTRUE) {
-    lv_timer_handler();
-  }
+  // removed rogue xQueueReceive from here
 
   // ==========================================================================================
   // 自动关机逻辑 (5分钟无操作且不在训练模式)
@@ -1869,6 +1868,16 @@ void networkInitTask(void *pvParameters) {
     // 配置加载结果静默处理
     esp_task_wdt_reset();
 
+    // 启动WiFi传输（此时配置已加载，可使用船组编号）
+    // 先启动WiFi传输，避免其阻塞(delay)影响MQTT连接的串口响应
+    if (!training.isActive() && !wifiTransfer.isActive()) {
+      if (wifiTransfer.start()) {
+        Serial.println("[WiFi传输] ✅ 已自动启动（使用船组编号）");
+      } else {
+        Serial.println("[WiFi传输] ❌ 启动失败");
+      }
+    }
+
     if (configManager.isMQTTConfigReady()) {
       const auto &mqttConfig = configManager.getMQTTConfig();
 
@@ -1880,15 +1889,6 @@ void networkInitTask(void *pvParameters) {
       }
     } else {
       Serial.println("[网络任务] MQTT配置未就绪，跳过MQTT任务创建");
-    }
-
-    // 启动WiFi传输（此时配置已加载，可使用船组编号）
-    if (!training.isActive() && !wifiTransfer.isActive()) {
-      if (wifiTransfer.start()) {
-        Serial.println("[WiFi传输] ✅ 已自动启动（使用船组编号）");
-      } else {
-        Serial.println("[WiFi传输] ❌ 启动失败");
-      }
     }
 
     networkTaskCompleted = true;

@@ -1409,7 +1409,7 @@ bool connectHybridSocketMQTT() {
     delete mcuTcpClient;
     mcuTcpClient = nullptr;
   }
-  mcuTcpClient = new (std::nothrow) TinyGsmClient(*hybridModem);
+  mcuTcpClient = new (std::nothrow) TinyGsmClient(*hybridModem, 1);
   if (!mcuTcpClient) {
     gMqttConnectBusy = false;
     return false;
