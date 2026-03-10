@@ -11,13 +11,11 @@ public:
   WifiTransferManager();
   ~WifiTransferManager();
 
-  // 生命周期管理
-  bool start();  // 启动WiFi传输模式
-  void stop();   // 停止WiFi传输模式
-  void update(); // 定期更新和状态检查
+  bool start();
+  void stop();
+  void update();
   bool isActive() const { return active; }
 
-  // WiFi配置
   void setSSID(const String &ssid) { this->ssid = ssid; }
   void setPassword(const String &password) { this->password = password; }
   String getSSID() const { return ssid; }
@@ -30,20 +28,36 @@ private:
 
   WebServer *server;
 
-  // WiFi设置
   bool setupWiFiAP();
   void teardownWiFi();
 
-  // Web服务器路由
   void setupWebServer();
   void handleRoot();
   void handleFileList();
   void handleFileDownload();
+  void handleFsStatus();
+  void handleFileItemPut();
+  void handleFileItemDelete();
+  void handleFileUpload();
+  void handleFileUploadPost();
 
-  // 辅助函数
-  String listDirectory(const String &path, int page = 1, int limit = 20);
+  String listDirectory(const String &path, int page = 1, int folderLimit = 30);
   bool isValidPath(const String &path);
   String getContentType(const String &filename);
+  String escapeJson(const String &value);
+  bool parseRangeHeader(const String &rangeHeader, size_t fileSize, size_t &start,
+                        size_t &end);
+  bool createDirectories(const String &dirPath);
+  bool deleteRecursively(const String &path);
+
+  File uploadFile;
+  String uploadError;
+  String uploadSavedPath;
+  size_t uploadWrittenBytes;
+  bool mqttPausedByApClient;
+  int lastApClientCount;
 };
 
 #endif
+
+

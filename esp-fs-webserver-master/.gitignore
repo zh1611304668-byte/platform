@@ -1,0 +1,44 @@
+# Prerequisites
+*.d
+
+# Compiled Object files
+*.slo
+*.lo
+*.o
+*.obj
+
+# Precompiled Headers
+*.gch
+*.pch
+
+# Compiled Dynamic libraries
+*.so
+*.dylib
+*.dll
+
+# Fortran module files
+*.mod
+*.smod
+
+# Compiled Static libraries
+*.lai
+*.la
+*.a
+*.lib
+
+# Executables
+*.exe
+*.out
+*.app
+
+# PlatformIO in VScode
+.pio/
+.vscode/
+*.lnk
+*.bak
+/build
+/built-in-webpages/setup/build_setup/node_modules
+/examples/customHTML/build
+/pio_examples/temp
+/pio_examples/simpleServer/setup/build_setup/node_modules
+/built-in-webpages/edit/build_edit/node_modules
