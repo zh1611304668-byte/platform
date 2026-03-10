@@ -33,6 +33,9 @@ private:
 
   void setupWebServer();
   void handleRoot();
+  void handleOtaPage();
+  void handleOtaUpload();
+  void handleOtaUploadPost();
   void handleFileList();
   void handleFileDownload();
   void handleFsStatus();
@@ -54,10 +57,13 @@ private:
   String uploadError;
   String uploadSavedPath;
   size_t uploadWrittenBytes;
-  bool mqttPausedByApClient;
-  int lastApClientCount;
+
+  bool otaInProgress;
+  bool otaResultOk;
+  String otaResultMsg;
+  size_t otaWrittenBytes;
+  size_t otaExpectedBytes;
+  bool otaNetworkSuspended;
 };
 
 #endif
-
-

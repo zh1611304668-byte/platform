@@ -1,6 +1,7 @@
 #include "WifiTransferManager.h"
 #include "ConfigManager.h"
 #include "MQTTManager.h"
+#include <Update.h>
 #include <esp_task_wdt.h>
 
 extern ConfigManager configManager;
@@ -14,6 +15,7 @@ static const int DEFAULT_FOLDER_PAGE_SIZE = 30;
 static const int MAX_FOLDER_PAGE_SIZE = 60;
 static const int MAX_FILES_PER_RESPONSE = 200;
 static const unsigned long DOWNLOAD_STALL_TIMEOUT_MS = 30000;
+static const size_t OTA_MAX_BIN_SIZE = 0x300000;
 static uint32_t g_downloadSessionCounter = 0;
 static uint32_t g_activeSessionId = 0;
 static String g_activeSessionFile;
@@ -24,7 +26,9 @@ static String g_lastTransferError;
 
 WifiTransferManager::WifiTransferManager()
     : active(false), ssid("Rowing_Data"), password(DEFAULT_PASSWORD),
-      server(nullptr) {}
+      server(nullptr), otaInProgress(false), otaResultOk(false),
+      otaResultMsg(""), otaWrittenBytes(0), otaExpectedBytes(0),
+      otaNetworkSuspended(false) {}
 
 WifiTransferManager::~WifiTransferManager() { stop(); }
 
@@ -71,7 +75,10 @@ void WifiTransferManager::stop() {
     server = nullptr;
   }
 
-
+  if (otaNetworkSuspended) {
+    requestNetworkResume();
+    otaNetworkSuspended = false;
+  }
 
   teardownWiFi();
   active = false;
@@ -139,6 +146,9 @@ void WifiTransferManager::setupWebServer() {
   server->collectHeaders(headerKeys, 1);
 
   server->on("/", [this]() { this->handleRoot(); });
+  server->on("/ota", [this]() { this->handleOtaPage(); });
+  server->on("/update", HTTP_POST, [this]() { this->handleOtaUploadPost(); },
+             [this]() { this->handleOtaUpload(); });
   server->on("/api/list", [this]() { this->handleFileList(); });
   server->on("/api/fs/status", [this]() { this->handleFsStatus(); });
   server->on("/api/fs/item", HTTP_PUT, [this]() { this->handleFileItemPut(); });
@@ -401,6 +411,178 @@ load('/', 1);
 
   server->send(200, "text/html; charset=utf-8", html);
 }
+void WifiTransferManager::handleOtaPage() {
+  const char *html = R"rawliteral(
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>OTA Update</title>
+<style>
+body{font-family:Arial,sans-serif;background:#f4f6f8;margin:0;padding:24px;color:#1f2937}
+.card{max-width:560px;margin:0 auto;background:#fff;border:1px solid #dde3ea;border-radius:12px;padding:18px}
+h2{margin:0 0 12px}
+.row{margin:10px 0}
+button{border:1px solid #0b6bcb;color:#0b6bcb;background:#fff;padding:8px 14px;border-radius:8px;cursor:pointer}
+button:disabled{opacity:.5;cursor:not-allowed}
+.progress{height:10px;background:#e5e7eb;border-radius:999px;overflow:hidden}
+.bar{height:100%;width:0;background:#0b6bcb}
+.log{margin-top:10px;font-size:13px;white-space:pre-wrap}
+.note{font-size:12px;color:#6b7280}
+</style>
+</head>
+<body>
+<div class="card">
+  <h2>Firmware OTA Update</h2>
+  <div class="row"><input id="bin" type="file" accept=".bin" /></div>
+  <div class="row"><button id="btn" onclick="startOta()">Start Update</button></div>
+  <div class="progress"><div id="bar" class="bar"></div></div>
+  <div id="log" class="log">Select firmware.bin</div>
+  <div class="note">Device will restart automatically after a successful update.</div>
+</div>
+<script>
+function setLog(t){document.getElementById('log').textContent=t;}
+function setProgress(v){document.getElementById('bar').style.width=v+'%';}
+function startOta(){
+  const f = document.getElementById('bin').files[0];
+  if(!f){ setLog('Please select a .bin file'); return; }
+  const btn = document.getElementById('btn');
+  btn.disabled = true;
+  setLog('Uploading...');
+  const fd = new FormData();
+  fd.append('update', f);
+  const xhr = new XMLHttpRequest();
+  xhr.open('POST', '/update?size=' + f.size);
+  xhr.upload.onprogress = (e)=>{
+    if(e.lengthComputable){ setProgress(Math.round((e.loaded/e.total)*100)); }
+  };
+  xhr.onload = ()=>{
+    btn.disabled = false;
+    setProgress(100);
+    setLog(xhr.responseText || ('HTTP ' + xhr.status));
+  };
+  xhr.onerror = ()=>{
+    btn.disabled = false;
+    setLog('Upload failed');
+  };
+  xhr.send(fd);
+}
+</script>
+</body>
+</html>
+)rawliteral";
+
+  server->send(200, "text/html; charset=utf-8", html);
+}
+
+void WifiTransferManager::handleOtaUploadPost() {
+  if (otaInProgress) {
+    server->send(409, "text/plain", "OTA still in progress");
+    return;
+  }
+
+  if (!otaResultOk) {
+    String msg = "OTA failed";
+    if (otaResultMsg.length() > 0) {
+      msg += ": " + otaResultMsg;
+    }
+    server->send(500, "text/plain", msg);
+    return;
+  }
+
+  String okMsg = "OTA success, rebooting... bytes=" + String((unsigned long)otaWrittenBytes);
+  server->send(200, "text/plain", okMsg);
+  delay(500);
+  ESP.restart();
+}
+
+void WifiTransferManager::handleOtaUpload() {
+  HTTPUpload &upload = server->upload();
+
+  if (upload.status == UPLOAD_FILE_START) {
+    otaInProgress = true;
+    otaResultOk = false;
+    otaResultMsg = "";
+    otaWrittenBytes = 0;
+    otaExpectedBytes = server->hasArg("size") ? (size_t)server->arg("size").toInt() : 0;
+
+    if (otaExpectedBytes == 0 || otaExpectedBytes > OTA_MAX_BIN_SIZE) {
+      otaResultMsg = "invalid size";
+      otaInProgress = false;
+      return;
+    }
+
+    otaNetworkSuspended = requestNetworkSuspend();
+    if (!otaNetworkSuspended) {
+      Serial.println("[WiFiTransfer][OTA] warning: network suspend failed");
+    }
+
+    if (!Update.begin(otaExpectedBytes, U_FLASH)) {
+      otaResultMsg = String("Update.begin failed: ") + Update.errorString();
+      otaInProgress = false;
+      if (otaNetworkSuspended) {
+        requestNetworkResume();
+        otaNetworkSuspended = false;
+      }
+      return;
+    }
+
+    Serial.printf("[WiFiTransfer][OTA] start, size=%u\n", (unsigned)otaExpectedBytes);
+  }
+
+  if (upload.status == UPLOAD_FILE_WRITE) {
+    if (!otaInProgress || otaResultMsg.length() > 0) {
+      return;
+    }
+
+    size_t written = Update.write(upload.buf, upload.currentSize);
+    if (written != upload.currentSize) {
+      otaResultMsg = String("Update.write failed: ") + Update.errorString();
+      Update.abort();
+      otaInProgress = false;
+      if (otaNetworkSuspended) {
+        requestNetworkResume();
+        otaNetworkSuspended = false;
+      }
+      return;
+    }
+
+    otaWrittenBytes += written;
+    esp_task_wdt_reset();
+    yield();
+  }
+
+  if (upload.status == UPLOAD_FILE_END) {
+    if (otaInProgress && otaResultMsg.length() == 0) {
+      if (Update.end(true)) {
+        otaResultOk = true;
+        otaResultMsg = "ok";
+        Serial.printf("[WiFiTransfer][OTA] done bytes=%u\n", (unsigned)otaWrittenBytes);
+      } else {
+        otaResultMsg = String("Update.end failed: ") + Update.errorString();
+      }
+    }
+
+    otaInProgress = false;
+    if (otaNetworkSuspended) {
+      requestNetworkResume();
+      otaNetworkSuspended = false;
+    }
+  }
+
+  if (upload.status == UPLOAD_FILE_ABORTED) {
+    Update.abort();
+    otaInProgress = false;
+    otaResultOk = false;
+    otaResultMsg = "OTA aborted";
+    if (otaNetworkSuspended) {
+      requestNetworkResume();
+      otaNetworkSuspended = false;
+    }
+    Serial.println("[WiFiTransfer][OTA] aborted");
+  }
+}
 void WifiTransferManager::handleFileList() {
   String path = server->hasArg("path") ? server->arg("path") : "/";
 
@@ -432,6 +614,10 @@ void WifiTransferManager::handleFileList() {
 }
 
 void WifiTransferManager::handleFileDownload() {
+  if (otaInProgress) {
+    server->send(503, "text/plain", "OTA in progress");
+    return;
+  }
   if (!server->hasArg("file")) {
     server->send(400, "text/plain", "Missing file parameter");
     return;
@@ -658,6 +844,11 @@ void WifiTransferManager::handleFsStatus() {
   json += ",\"activeSessionSent\":" + String((unsigned long)g_activeSessionSent);
   json += ",\"activeSessionTotal\":" + String((unsigned long)g_activeSessionTotal);
   json += ",\"lastTransferError\":\"" + escapeJson(g_lastTransferError) + "\"";
+  json += ",\"otaInProgress\":" + String(otaInProgress ? "true" : "false");
+  json += ",\"otaResultOk\":" + String(otaResultOk ? "true" : "false");
+  json += ",\"otaWritten\":" + String((unsigned long)otaWrittenBytes);
+  json += ",\"otaExpected\":" + String((unsigned long)otaExpectedBytes);
+  json += ",\"otaResultMsg\":\"" + escapeJson(otaResultMsg) + "\"";
   json += "}";
   server->send(200, "application/json", json);
 }
