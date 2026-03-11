@@ -4,15 +4,18 @@
 #include <Arduino.h>
 
 // 亮度等级常量 (PWM值: 0-255)
-constexpr uint8_t BRIGHTNESS_FULL = 255; // 100%
-constexpr uint8_t BRIGHTNESS_HIGH = 180; //  70%
-constexpr uint8_t BRIGHTNESS_MED = 75;   //  30%
-constexpr uint8_t BRIGHTNESS_LOW = 25;   //  10%
+constexpr uint8_t BRIGHTNESS_FULL = 255;  // 100%
+constexpr uint8_t BRIGHTNESS_HIGH = 178;  //  70%
+constexpr uint8_t BRIGHTNESS_HALF = 127;  //  50%
+constexpr uint8_t BRIGHTNESS_MED = 76;    //  30%
+constexpr uint8_t BRIGHTNESS_LOW = 25;    //  10%
 
 // 亮度降低时间阈值 (毫秒)
-constexpr unsigned long DIM_DELAY_1 = 30000;  // 30秒
-constexpr unsigned long DIM_DELAY_2 = 60000;  // 1分钟
-constexpr unsigned long DIM_DELAY_3 = 120000; // 2分钟
+constexpr unsigned long DIM_DELAY_1 = 120000; // 2分钟
+constexpr unsigned long DIM_DELAY_2 = 180000; // 3分钟
+constexpr unsigned long DIM_DELAY_3 = 300000; // 5分钟
+constexpr unsigned long DIM_DELAY_4 = 420000; // 7分钟
+constexpr unsigned long DIM_DELAY_5 = 600000; // 10分钟 (自动关机阈值)
 
 // PWM配置
 constexpr uint32_t PWM_FREQ = 5000;   // 5kHz频率

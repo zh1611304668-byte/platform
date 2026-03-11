@@ -37,6 +37,7 @@ private:
   void handleOtaUpload();
   void handleOtaUploadPost();
   void handleFileList();
+  void handleFilePreview();
   void handleFileDownload();
   void handleFsStatus();
   void handleFileItemPut();

@@ -147,8 +147,8 @@ void TrainingMode::checkPauseConditions() {
 
   unsigned long now = millis();
 
-  // 10秒无桨数变化暂停计时
-  if (lastStrokeTime > 0 && (now - lastStrokeTime) > 10000) {
+  // 20秒无桨数变化暂停计时
+  if (lastStrokeTime > 0 && (now - lastStrokeTime) > 20000) {
     if (!paused) {
       paused = true;
       pauseStartTime = now;

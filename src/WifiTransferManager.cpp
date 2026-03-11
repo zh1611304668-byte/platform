@@ -1,4 +1,4 @@
-#include "WifiTransferManager.h"
+﻿#include "WifiTransferManager.h"
 #include "ConfigManager.h"
 #include "MQTTManager.h"
 #include <Update.h>
@@ -15,6 +15,7 @@ static const int DEFAULT_FOLDER_PAGE_SIZE = 30;
 static const int MAX_FOLDER_PAGE_SIZE = 60;
 static const int MAX_FILES_PER_RESPONSE = 200;
 static const unsigned long DOWNLOAD_STALL_TIMEOUT_MS = 30000;
+static const size_t PREVIEW_MAX_BYTES = 16 * 1024;
 static const size_t OTA_MAX_BIN_SIZE = 0x300000;
 static uint32_t g_downloadSessionCounter = 0;
 static uint32_t g_activeSessionId = 0;
@@ -150,6 +151,7 @@ void WifiTransferManager::setupWebServer() {
   server->on("/update", HTTP_POST, [this]() { this->handleOtaUploadPost(); },
              [this]() { this->handleOtaUpload(); });
   server->on("/api/list", [this]() { this->handleFileList(); });
+  server->on("/api/preview", [this]() { this->handleFilePreview(); });
   server->on("/api/fs/status", [this]() { this->handleFsStatus(); });
   server->on("/api/fs/item", HTTP_PUT, [this]() { this->handleFileItemPut(); });
   server->on("/api/fs/item", HTTP_DELETE, [this]() { this->handleFileItemDelete(); });
@@ -176,74 +178,113 @@ void WifiTransferManager::handleRoot() {
 html,body{margin:0;height:100%;font-family:"Segoe UI",Arial,sans-serif;background:var(--bg);color:var(--text)}
 .app{display:flex;height:100vh;width:100vw;overflow:hidden}
 .left,.right{display:flex;flex-direction:column;background:var(--panel)}
-.left{width:19%;min-width:145px;border-right:1px solid var(--line)}
-.right{flex:1;min-width:340px}
-.head{padding:14px 16px;border-bottom:1px solid var(--line)}
-.title{font-size:16px;font-weight:700}
+.left{width:26%;min-width:280px;border-right:1px solid var(--line)}
+.right{flex:1;min-width:420px}
+.head{padding:12px 14px;border-bottom:1px solid var(--line);display:flex;align-items:center;justify-content:space-between;gap:8px}
+.head-main{min-width:0}
+.title{font-size:15px;font-weight:700}
 .sub{margin-top:4px;color:var(--muted);font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .list{flex:1;overflow:auto;padding:8px}
-.row{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:10px 12px;margin:6px 0;border:1px solid var(--line);border-radius:8px;background:#fff;cursor:pointer}
-.row:hover{background:#f9fbfd}
+.tree-item{border:1px solid var(--line);border-radius:8px;background:#fff;margin:6px 0}
+.tree-head{display:flex;align-items:center;gap:8px;padding:8px 10px;cursor:pointer}
+.tree-head:hover{background:#f9fbfd}
+.toggle{width:18px;height:18px;border:1px solid #b8c5d6;border-radius:3px;display:inline-flex;align-items:center;justify-content:center;font-size:12px;color:#4b5563;flex-shrink:0;background:#fff}
+.folder-icon{color:#9a6700;font-size:14px;flex-shrink:0}
 .name{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .meta{font-size:12px;color:var(--muted)}
-.btn{border:1px solid var(--line);background:#fff;color:var(--text);border-radius:8px;padding:6px 10px;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;line-height:1;text-decoration:none;user-select:none}
+.children{border-top:1px dashed #d8e0eb;padding:6px 8px 8px 28px}
+.file-row{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:6px 0;border-bottom:1px solid #eef2f7}
+.file-row:last-child{border-bottom:none}
+.file-main{min-width:0;flex:1;cursor:pointer}
+.file-name{color:#1d4ed8}
+.file-name:hover{text-decoration:underline}
+.btn{border:1px solid var(--line);background:#fff;color:var(--text);border-radius:8px;padding:5px 10px;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;line-height:1;text-decoration:none;user-select:none}
 .btn:hover{background:#f9fbfd}
 .btn.primary{border-color:var(--brand);color:var(--brand)}
 a.btn,a.btn:visited,a.btn:hover,a.btn:active{text-decoration:none}
 .download-btn.disabled,.download-btn[aria-disabled="true"]{opacity:.45;pointer-events:none;border-color:#cbd5e1;color:#94a3b8;background:#f8fafc}
 .footer{padding:10px 12px;border-top:1px solid var(--line);display:flex;align-items:center;justify-content:space-between;gap:8px}
-.note{padding:8px 12px;color:#8a5500;background:#fff7e8;border-top:1px solid #f2dcaf;font-size:12px}
 .empty{padding:16px;text-align:center;color:var(--muted)}
-@media (max-width:900px){.app{flex-direction:column}.left{width:100%;min-width:0;height:46%}.right{min-width:0;height:54%}}
+.preview{flex:1;display:flex;flex-direction:column;min-height:0;background:#fafcff}
+.preview-wrap{padding:12px;display:flex;flex-direction:column;min-height:0;gap:8px}
+.preview-title{font-size:13px;color:var(--text);font-weight:600}
+.preview-meta{font-size:12px;color:var(--muted)}
+.preview-body{background:#fff;border:1px solid var(--line);border-radius:6px;padding:6px;flex:1;min-height:0;overflow:auto}
+.preview-text{margin:0;font-size:12px;line-height:1.35;white-space:pre-wrap;word-break:break-word}
+.csv-table{width:100%;border-collapse:collapse;font-size:12px}
+.csv-table th,.csv-table td{border:1px solid #e5e7eb;padding:4px 6px;text-align:left;white-space:nowrap}
+.csv-table thead th{position:sticky;top:0;background:#f3f6fb;z-index:1}
+.csv-table tbody tr:nth-child(even){background:#fafbfc}
+@media (max-width:900px){
+  .app{flex-direction:column}
+  .left{width:100%;min-width:0;height:42%}
+  .right{min-width:0;height:58%}
+}
 </style>
 </head>
 <body>
-<div class="app">
+<div class="app" id="appRoot">
   <section class="left">
     <div class="head">
-      <div class="title" id="titleFolder"></div>
-      <div class="sub" id="pathLabel">/</div>
+      <div class="head-main">
+        <div class="title" id="titleFolder"></div>
+        <div class="sub" id="pathLabel">/</div>
+      </div>
     </div>
-    <div class="list" id="folderList"><div class="empty" id="loadingText"></div></div>
+    <div class="list" id="folderTree"><div class="empty" id="loadingText"></div></div>
     <div class="footer">
       <button class="btn" id="prevBtn" onclick="prevPage()"></button>
       <span class="meta" id="pageInfo"></span>
       <button class="btn" id="nextBtn" onclick="nextPage()"></button>
     </div>
   </section>
+
   <section class="right">
     <div class="head">
-      <div class="title" id="titleFile"></div>
-      <div class="sub" id="subtitleFile"></div>
+      <div class="head-main">
+        <div class="title" id="titlePreview"></div>
+        <div class="sub" id="subtitlePreview"></div>
+      </div>
     </div>
-    <div class="list" id="fileList"><div class="empty" id="selectFolderText"></div></div>
-    <div class="note" id="fileNote" style="display:none"></div>
+    <div class="preview" id="previewBox">
+      <div class="preview-wrap">
+        <div class="preview-title" id="previewTitle"></div>
+        <div class="preview-meta" id="previewMeta"></div>
+        <div class="preview-body" id="previewBody"></div>
+      </div>
+    </div>
   </section>
 </div>
+
 <script>
 const TEXT = {
-  folder: '\u76ee\u5f55',
-  file: '\u6587\u4ef6',
-  subtitle: '\u70b9\u51fb\u4e0b\u8f7d\uff0c\u652f\u6301\u65ad\u70b9\u7eed\u4f20',
+  folder: '\u6587\u4ef6\u5939\u4e0e\u6587\u4ef6',
+  preview: '\u9884\u89c8',
+  subtitle: '\u5de6\u4fa7\u70b9\u51fb\u6587\u4ef6\u53ef\u9884\u89c8\uff0c\u70b9\u51fb\u4e0b\u8f7d\u6309\u94ae\u4f20\u8f93',
   loading: '\u52a0\u8f7d\u4e2d...',
-  selectFolder: '\u8bf7\u9009\u62e9\u76ee\u5f55',
   prev: '\u4e0a\u4e00\u9875',
   next: '\u4e0b\u4e00\u9875',
   page: '\u7b2c {n} \u9875',
-  back: '.. \u8fd4\u56de\u4e0a\u4e00\u7ea7',
-  emptyFolders: '\u5f53\u524d\u76ee\u5f55\u6ca1\u6709\u5b50\u6587\u4ef6\u5939',
-  emptyFiles: '\u5f53\u524d\u76ee\u5f55\u6ca1\u6709\u6587\u4ef6',
-  download: '\u4e0b\u8f7d',
-  requestFailed: '\u8bf7\u6c42\u5931\u8d25',
-  loadFailed: '\u52a0\u8f7d\u5931\u8d25',
   folderType: '\u76ee\u5f55',
-  tooManyFiles: '\u5f53\u524d\u76ee\u5f55\u6587\u4ef6\u8f83\u591a\uff0c\u5df2\u9650\u5236\u8fd4\u56de\u524d 200 \u4e2a\u6587\u4ef6\u3002'
+  emptyFolders: '\u5f53\u524d\u76ee\u5f55\u4e0b\u65e0\u6587\u4ef6\u5939',
+  emptyFiles: '\u65e0\u6587\u4ef6',
+  openFolderFail: '\u52a0\u8f7d\u6587\u4ef6\u5939\u5931\u8d25',
+  download: '\u4e0b\u8f7d',
+  previewLoading: '\u9884\u89c8\u52a0\u8f7d\u4e2d...',
+  previewFail: '\u9884\u89c8\u5931\u8d25',
+  previewHint: '\u8bf7\u5728\u5de6\u4fa7\u70b9\u51fb CSV \u6587\u4ef6\u540d\u79f0\u8fdb\u884c\u9884\u89c8',
+  previewRows: '\u5df2\u663e\u793a\u884c\u6570',
+  previewTruncated: '\u9884\u89c8\u5df2\u622a\u65ad\uff08\u4ec5\u524d 16KB\uff09',
+  tooManyFiles: '\u6587\u4ef6\u8f83\u591a\uff0c\u5217\u8868\u5df2\u9650\u5236\u524d 200 \u4e2a\u3002',
+  requestFailed: '\u8bf7\u6c42\u5931\u8d25'
 };
 
 const PAGE_SIZE = 30;
 let currentPath = '/';
 let currentPage = 1;
 let hasMoreFolders = false;
+let rootFolders = [];
+let folderState = {};
 let downloadLocked = false;
 let downloadPollTimer = 0;
 let downloadSessionWatchStart = 0;
@@ -263,7 +304,7 @@ function formatSize(bytes){
 function tPage(n){ return TEXT.page.replace('{n}', n); }
 
 function setDownloadButtonsLocked(locked, ownerHref){
-  const buttons = document.querySelectorAll('#fileList .download-btn');
+  const buttons = document.querySelectorAll('#folderTree .download-btn');
   for(const btn of buttons){
     const isOwner = ownerHref && btn.getAttribute('href') === ownerHref;
     if(locked && !isOwner){
@@ -281,129 +322,228 @@ function setDownloadButtonsLocked(locked, ownerHref){
 function releaseDownloadLock(){
   downloadLocked = false;
   downloadOwnerHref = '';
-  if(downloadPollTimer){
-    clearInterval(downloadPollTimer);
-    downloadPollTimer = 0;
-  }
+  if(downloadPollTimer){ clearInterval(downloadPollTimer); downloadPollTimer = 0; }
   setDownloadButtonsLocked(false, '');
 }
 
 function pollDownloadState(){
   fetch('/api/fs/status')
     .then(r => r.json())
-    .then(s => {
-      if(!s.activeSessionRunning){
-        releaseDownloadLock();
-      }
-    })
-    .catch(() => {
-      if(Date.now() - downloadSessionWatchStart > 15000){
-        releaseDownloadLock();
-      }
-    });
+    .then(s => { if(!s.activeSessionRunning){ releaseDownloadLock(); } })
+    .catch(() => { if(Date.now() - downloadSessionWatchStart > 15000){ releaseDownloadLock(); } });
 }
 
 function startDownload(anchor){
-  if(downloadLocked){
-    return false;
-  }
+  if(downloadLocked){ return false; }
   downloadLocked = true;
   downloadOwnerHref = anchor.getAttribute('href') || '';
   downloadSessionWatchStart = Date.now();
   setDownloadButtonsLocked(true, downloadOwnerHref);
-
-  if(downloadPollTimer){
-    clearInterval(downloadPollTimer);
-  }
+  if(downloadPollTimer){ clearInterval(downloadPollTimer); }
   downloadPollTimer = setInterval(pollDownloadState, 800);
   setTimeout(pollDownloadState, 300);
   return true;
 }
 
-function render(data){
-  currentPath = data.path || '/';
-  currentPage = data.page || 1;
-  hasMoreFolders = !!data.hasMoreFolders;
-
-  document.getElementById('pathLabel').textContent = currentPath;
-  document.getElementById('pageInfo').textContent = tPage(currentPage);
-  document.getElementById('prevBtn').disabled = currentPage <= 1;
-  document.getElementById('nextBtn').disabled = !hasMoreFolders;
-
-  const folderList = document.getElementById('folderList');
-  const folders = data.folders || [];
-  let folderHtml = '';
-  if(currentPath !== '/'){
-    folderHtml += `<div class="row" onclick="loadPath('${encodeURIComponent(data.parent || '/')}')"><span class="name">${TEXT.back}</span><span class="meta">${TEXT.folderType}</span></div>`;
-  }
-  if(!folders.length){
-    folderHtml += `<div class="empty">${TEXT.emptyFolders}</div>`;
-  } else {
-    for(const f of folders){
-      const encoded = encodeURIComponent(f.path);
-      folderHtml += `<div class="row" onclick="loadPath('${encoded}')"><span class="name">${escapeHtml(f.name)}</span><span class="meta">${TEXT.folderType}</span></div>`;
+function parseCsvLine(line){
+  const out = [];
+  let cur = '';
+  let inQuotes = false;
+  for(let i=0;i<line.length;i++){
+    const ch = line[i];
+    if(ch === '"'){
+      if(inQuotes && i + 1 < line.length && line[i+1] === '"'){ cur += '"'; i++; }
+      else { inQuotes = !inQuotes; }
+    } else if(ch === ',' && !inQuotes){
+      out.push(cur); cur = '';
+    } else {
+      cur += ch;
     }
   }
-  folderList.innerHTML = folderHtml;
-
-  const fileList = document.getElementById('fileList');
-  const files = data.files || [];
-  if(!files.length){
-    fileList.innerHTML = `<div class="empty">${TEXT.emptyFiles}</div>`;
-  } else {
-    let fileHtml = '';
-    for(const f of files){
-      const dl = '/download?file=' + encodeURIComponent(f.path);
-      fileHtml += `<div class="row"><div style="min-width:0;flex:1"><div class="name">${escapeHtml(f.name)}</div><div class="meta">${formatSize(f.size||0)}</div></div><a class="btn primary download-btn" href="${dl}" download="${escapeHtml(f.name)}" onclick="return startDownload(this)">${TEXT.download}</a></div>`;
-    }
-    fileList.innerHTML = fileHtml;
-    if(downloadLocked){
-      setDownloadButtonsLocked(true, downloadOwnerHref);
-    }
-  }
-
-  const fileNote = document.getElementById('fileNote');
-  if(data.hasMoreFiles){
-    fileNote.style.display = 'block';
-    fileNote.textContent = TEXT.tooManyFiles;
-  } else {
-    fileNote.style.display = 'none';
-  }
+  out.push(cur);
+  return out;
 }
 
-function load(path, page){
+function resetPreview(){
+  document.getElementById('previewTitle').textContent = 'CSV Preview';
+  document.getElementById('previewMeta').textContent = TEXT.previewHint;
+  document.getElementById('previewBody').innerHTML = '<pre class="preview-text"></pre>';
+}
+
+function renderCsvPreview(name, text, truncated){
+  const title = document.getElementById('previewTitle');
+  const meta = document.getElementById('previewMeta');
+  const body = document.getElementById('previewBody');
+
+  const lines = String(text || '').replace(/\r/g,'').split('\n').filter(l => l.length > 0);
+  if(!lines.length){
+    title.textContent = name || 'CSV';
+    meta.textContent = '0 rows';
+    body.innerHTML = '<pre class="preview-text">(empty)</pre>';
+    return;
+  }
+
+  const maxRows = 140;
+  const rows = lines.slice(0, maxRows).map(parseCsvLine);
+  const header = rows[0] || [];
+  const dataRows = rows.slice(1);
+  let html = '<table class="csv-table"><thead><tr>';
+  for(const h of header){ html += '<th>' + escapeHtml(h) + '</th>'; }
+  html += '</tr></thead><tbody>';
+  for(const r of dataRows){
+    html += '<tr>';
+    for(const cell of r){ html += '<td>' + escapeHtml(cell) + '</td>'; }
+    html += '</tr>';
+  }
+  html += '</tbody></table>';
+
+  const cutMsg = (truncated || lines.length > maxRows) ? (' | ' + TEXT.previewTruncated) : '';
+  title.textContent = name || 'CSV';
+  meta.textContent = TEXT.previewRows + ': ' + dataRows.length + cutMsg;
+  body.innerHTML = html;
+}
+
+function previewFile(encodedPath, encodedName){
+  const path = decodeURIComponent(encodedPath);
+  const name = decodeURIComponent(encodedName || '');
+  document.getElementById('previewTitle').textContent = name || path;
+  document.getElementById('previewMeta').textContent = '';
+  document.getElementById('previewBody').innerHTML = '<pre class="preview-text">' + TEXT.previewLoading + '</pre>';
+
+  fetch(`/api/preview?file=${encodeURIComponent(path)}`)
+    .then(r => r.json())
+    .then(d => {
+      if(d.error || !d.ok){
+        document.getElementById('previewBody').innerHTML = '<pre class="preview-text">' + (d.error ? escapeHtml(String(d.error)) : TEXT.previewFail) + '</pre>';
+        return;
+      }
+      if((name || '').toLowerCase().endsWith('.csv')){
+        renderCsvPreview(name || d.name || path, d.preview || '', !!d.truncated);
+      } else {
+        document.getElementById('previewBody').innerHTML = '<pre class="preview-text">' + escapeHtml(d.preview || '') + '</pre>';
+        document.getElementById('previewMeta').textContent = d.truncated ? TEXT.previewTruncated : '';
+      }
+    })
+    .catch(() => {
+      document.getElementById('previewBody').innerHTML = '<pre class="preview-text">' + TEXT.previewFail + '</pre>';
+    });
+}
+
+function renderExplorer(){
+  const el = document.getElementById('folderTree');
+  if(!rootFolders.length){
+    el.innerHTML = `<div class="empty">${TEXT.emptyFolders}</div>`;
+    return;
+  }
+
+  let html = '';
+  for(const f of rootFolders){
+    const state = folderState[f.path] || {expanded:false, loading:false, files:[], error:'', hasMoreFiles:false};
+    const symbol = state.expanded ? '-' : '+';
+    html += `<div class="tree-item">`;
+    html += `<div class="tree-head" onclick="toggleFolder('${encodeURIComponent(f.path)}')">`;
+    html += `<span class="toggle">${symbol}</span><span class="folder-icon">[D]</span><span class="name">${escapeHtml(f.name)}</span>`;
+    html += `</div>`;
+    if(state.expanded){
+      html += `<div class="children">`;
+      if(state.loading){
+        html += `<div class="meta">${TEXT.loading}</div>`;
+      } else if(state.error){
+        html += `<div class="meta">${escapeHtml(state.error)}</div>`;
+      } else if(!state.files || !state.files.length){
+        html += `<div class="meta">${TEXT.emptyFiles}</div>`;
+      } else {
+        for(const file of state.files){
+          const dl = '/download?file=' + encodeURIComponent(file.path);
+          html += `<div class="file-row">`;
+          html += `<div class="file-main" onclick="previewFile('${encodeURIComponent(file.path)}','${encodeURIComponent(file.name || '')}')">`;
+          html += `<div class="file-name name">${escapeHtml(file.name || '')}</div><div class="meta">${formatSize(file.size || 0)}</div>`;
+          html += `</div>`;
+          html += `<a class="btn primary download-btn" href="${dl}" download="${escapeHtml(file.name || '')}" onclick="return startDownload(this)">${TEXT.download}</a>`;
+          html += `</div>`;
+        }
+        if(state.hasMoreFiles){ html += `<div class="meta">${TEXT.tooManyFiles}</div>`; }
+      }
+      html += `</div>`;
+    }
+    html += `</div>`;
+  }
+
+  el.innerHTML = html;
+  if(downloadLocked){ setDownloadButtonsLocked(true, downloadOwnerHref); }
+}
+
+function ensureFolderLoaded(path){
+  const st = folderState[path] || {expanded:false, loading:false, files:[], error:'', hasMoreFiles:false};
+  folderState[path] = st;
+  st.loading = true;
+  st.error = '';
+  renderExplorer();
+
+  fetch(`/api/list?path=${encodeURIComponent(path)}&page=1&limit=${PAGE_SIZE}`)
+    .then(r => r.json())
+    .then(d => {
+      st.loading = false;
+      if(d.error){ st.error = d.error || TEXT.openFolderFail; st.files = []; st.hasMoreFiles = false; }
+      else { st.files = d.files || []; st.hasMoreFiles = !!d.hasMoreFiles; }
+      renderExplorer();
+    })
+    .catch(() => {
+      st.loading = false;
+      st.error = TEXT.openFolderFail;
+      st.files = [];
+      st.hasMoreFiles = false;
+      renderExplorer();
+    });
+}
+
+function toggleFolder(encodedPath){
+  const path = decodeURIComponent(encodedPath);
+  const st = folderState[path] || {expanded:false, loading:false, files:[], error:'', hasMoreFiles:false};
+  st.expanded = !st.expanded;
+  folderState[path] = st;
+  renderExplorer();
+  if(st.expanded && !st.loading && (!st.files || st.files.length === 0) && !st.error){ ensureFolderLoaded(path); }
+}
+
+function loadRoot(path, page){
   const reqPath = path || '/';
   const reqPage = page || 1;
   fetch(`/api/list?path=${encodeURIComponent(reqPath)}&page=${reqPage}&limit=${PAGE_SIZE}`)
     .then(r => r.json())
     .then(d => {
       if(d.error){
-        document.getElementById('folderList').innerHTML = `<div class="empty">${escapeHtml(d.error)}</div>`;
-        document.getElementById('fileList').innerHTML = `<div class="empty">${TEXT.requestFailed}</div>`;
+        document.getElementById('folderTree').innerHTML = `<div class="empty">${escapeHtml(d.error)}</div>`;
         return;
       }
-      render(d);
+      currentPath = d.path || '/';
+      currentPage = d.page || 1;
+      hasMoreFolders = !!d.hasMoreFolders;
+      rootFolders = d.folders || [];
+      folderState = {};
+      document.getElementById('pathLabel').textContent = currentPath;
+      document.getElementById('pageInfo').textContent = tPage(currentPage);
+      document.getElementById('prevBtn').disabled = currentPage <= 1;
+      document.getElementById('nextBtn').disabled = !hasMoreFolders;
+      renderExplorer();
     })
     .catch(() => {
-      document.getElementById('folderList').innerHTML = `<div class="empty">${TEXT.loadFailed}</div>`;
-      document.getElementById('fileList').innerHTML = `<div class="empty">${TEXT.loadFailed}</div>`;
+      document.getElementById('folderTree').innerHTML = `<div class="empty">${TEXT.requestFailed}</div>`;
     });
 }
 
-function loadPath(encodedPath){ currentPage = 1; load(decodeURIComponent(encodedPath), 1); }
-function prevPage(){ if(currentPage > 1){ load(currentPath, currentPage - 1); } }
-function nextPage(){ if(hasMoreFolders){ load(currentPath, currentPage + 1); } }
+function prevPage(){ if(currentPage > 1){ loadRoot(currentPath, currentPage - 1); } }
+function nextPage(){ if(hasMoreFolders){ loadRoot(currentPath, currentPage + 1); } }
 
 document.getElementById('titleFolder').textContent = TEXT.folder;
-document.getElementById('titleFile').textContent = TEXT.file;
-document.getElementById('subtitleFile').textContent = TEXT.subtitle;
+document.getElementById('titlePreview').textContent = TEXT.preview;
+document.getElementById('subtitlePreview').textContent = TEXT.subtitle;
 document.getElementById('loadingText').textContent = TEXT.loading;
-document.getElementById('selectFolderText').textContent = TEXT.selectFolder;
 document.getElementById('prevBtn').textContent = TEXT.prev;
 document.getElementById('nextBtn').textContent = TEXT.next;
 document.getElementById('pageInfo').textContent = tPage(1);
-
-load('/', 1);
+resetPreview();
+loadRoot('/', 1);
 </script>
 </body>
 </html>
@@ -613,6 +753,77 @@ void WifiTransferManager::handleFileList() {
   server->send(200, "application/json", listDirectory(path, page, limit));
 }
 
+void WifiTransferManager::handleFilePreview() {
+  if (!server->hasArg("file")) {
+    server->send(400, "application/json", "{\"error\":\"Missing file parameter\"}");
+    return;
+  }
+
+  String filePath = server->arg("file");
+  if (!isValidPath(filePath)) {
+    server->send(400, "application/json", "{\"error\":\"Invalid file path\"}");
+    return;
+  }
+
+  if (!SD_MMC.exists(filePath.c_str())) {
+    server->send(404, "application/json", "{\"error\":\"File not found\"}");
+    return;
+  }
+
+  File file = SD_MMC.open(filePath.c_str(), FILE_READ);
+  if (!file || file.isDirectory()) {
+    if (file) {
+      file.close();
+    }
+    server->send(400, "application/json", "{\"error\":\"Invalid preview target\"}");
+    return;
+  }
+
+  const size_t totalSize = file.size();
+  String preview;
+  preview.reserve(PREVIEW_MAX_BYTES + 64);
+
+  const size_t chunkSize = 256;
+  char buf[chunkSize + 1];
+  size_t readTotal = 0;
+
+  while (readTotal < PREVIEW_MAX_BYTES) {
+    size_t toRead = PREVIEW_MAX_BYTES - readTotal;
+    if (toRead > chunkSize) {
+      toRead = chunkSize;
+    }
+
+    size_t n = file.read(reinterpret_cast<uint8_t *>(buf), toRead);
+    if (n == 0) {
+      break;
+    }
+
+    buf[n] = '\0';
+    preview += buf;
+    readTotal += n;
+
+    if ((readTotal % 1024) == 0) {
+      yield();
+    }
+  }
+
+  file.close();
+
+  bool truncated = (readTotal < totalSize);
+  String name = filePath.substring(filePath.lastIndexOf('/') + 1);
+
+  String json;
+  json.reserve(preview.length() + 256);
+  json += "{\"ok\":true";
+  json += ",\"name\":\"" + escapeJson(name) + "\"";
+  json += ",\"size\":" + String((unsigned long)totalSize);
+  json += ",\"read\":" + String((unsigned long)readTotal);
+  json += ",\"truncated\":" + String(truncated ? "true" : "false");
+  json += ",\"preview\":\"" + escapeJson(preview) + "\"";
+  json += "}";
+
+  server->send(200, "application/json", json);
+}
 void WifiTransferManager::handleFileDownload() {
   if (otaInProgress) {
     server->send(503, "text/plain", "OTA in progress");
@@ -1280,6 +1491,12 @@ bool WifiTransferManager::parseRangeHeader(const String &rangeHeader,
   end = (parsedEnd >= fileSize) ? (fileSize - 1) : parsedEnd;
   return true;
 }
+
+
+
+
+
+
 
 
 

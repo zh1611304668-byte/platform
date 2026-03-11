@@ -78,18 +78,30 @@ uint8_t BrightnessManager::calculateTargetBrightness(unsigned long inactiveTime,
     return BRIGHTNESS_FULL;
   }
 
+  // 超过10分钟且不在训练模式下，进入深度睡眠（自动关机）
+  if (inactiveTime >= DIM_DELAY_5) {
+    Serial.println("[BrightnessManager] 10分钟无操作，设备自动关机...");
+    // 确保屏幕先完全熄灭再休眠
+    applyBrightness(0);
+    delay(100); 
+    esp_deep_sleep_start();
+  }
+
   // 根据非活跃时间分级降低亮度
   if (inactiveTime < DIM_DELAY_1) {
-    // < 30秒: 100%亮度
+    // 0 - 2分钟: 100%亮度
     return BRIGHTNESS_FULL;
   } else if (inactiveTime < DIM_DELAY_2) {
-    // 30秒 - 1分钟: 70%亮度
+    // 2分钟 - 3分钟: 70%亮度
     return BRIGHTNESS_HIGH;
   } else if (inactiveTime < DIM_DELAY_3) {
-    // 1分钟 - 2分钟: 30%亮度
+    // 3分钟 - 5分钟: 50%亮度
+    return BRIGHTNESS_HALF;
+  } else if (inactiveTime < DIM_DELAY_4) {
+    // 5分钟 - 7分钟: 30%亮度
     return BRIGHTNESS_MED;
   } else {
-    // > 2分钟: 10%亮度
+    // 7分钟 - 10分钟: 10%亮度
     return BRIGHTNESS_LOW;
   }
 }

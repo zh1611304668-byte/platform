@@ -15,6 +15,10 @@ static double s_prevOutputLat = 0.0;
 static double s_prevOutputLon = 0.0;
 static bool s_hasPrevOutput = false;
 
+// 上一次成功记录的非零经纬度（GPS断点补救用）
+static double s_lastKnownLat = 0.0;
+static double s_lastKnownLon = 0.0;
+
 #ifndef M_PI
 #define M_PI 3.14159265358979323846
 #endif
@@ -127,13 +131,34 @@ static String addMillisToTimestamp(const String &timestamp,
 }
 
 void normalizeStrokeSnapshot(StrokeSnapshot &snapshot) {
-  if ((snapshot.lat == 0.0 && snapshot.lon == 0.0) && gnss.isValidFix()) {
-    double latestLat = gnss.getLatitude();
-    double latestLon = gnss.getLongitude();
-    if (latestLat != 0.0 || latestLon != 0.0) {
-      snapshot.lat = latestLat;
-      snapshot.lon = latestLon;
+  // 1. 优先：若坐标为0，尝试从GNSS实时读取当前有效定位
+  if (snapshot.lat == 0.0 && snapshot.lon == 0.0) {
+    if (gnss.isValidFix()) {
+      double latestLat = gnss.getLatitude();
+      double latestLon = gnss.getLongitude();
+      if (latestLat != 0.0 || latestLon != 0.0) {
+        snapshot.lat = latestLat;
+        snapshot.lon = latestLon;
+        Serial.printf("[Stroke] GPS补救(实时): lat=%.7f, lon=%.7f\n",
+                      snapshot.lat, snapshot.lon);
+      }
     }
+  }
+
+  // 2. 次选：若经过上述补救仍为0，使用上一次记录的非零坐标（GPS瞬断保护）
+  if (snapshot.lat == 0.0 && snapshot.lon == 0.0) {
+    if (s_lastKnownLat != 0.0 || s_lastKnownLon != 0.0) {
+      snapshot.lat = s_lastKnownLat;
+      snapshot.lon = s_lastKnownLon;
+      Serial.printf("[Stroke] GPS补救(上一桨): lat=%.7f, lon=%.7f\n",
+                    snapshot.lat, snapshot.lon);
+    }
+  }
+
+  // 3. 若坐标最终有效，更新「上一次已知有效坐标」
+  if (snapshot.lat != 0.0 || snapshot.lon != 0.0) {
+    s_lastKnownLat = snapshot.lat;
+    s_lastKnownLon = snapshot.lon;
   }
 
   if (snapshot.speed <= kMinSpeedForSnapshot) {
@@ -308,6 +333,8 @@ bool StrokeDataManager::captureStroke(int currentStrokeCount) {
     s_prevOutputLat = 0.0;
     s_prevOutputLon = 0.0;
     s_hasPrevOutput = false; // 标记为无前一桨
+    s_lastKnownLat = 0.0;    // 同步清空GPS补救缓存，避免上次训练坐标污染
+    s_lastKnownLon = 0.0;
   }
 
   // 第一桨没有前一桨，划距为0；后续桨使用上一桨的输出坐标计算

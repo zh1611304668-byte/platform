@@ -348,11 +348,13 @@ void SDCardManager::appendPerStrokeCsv(const StrokeSnapshot &snapshot) {
   static float prevTsSec = 0.0f;
   static float accumulatedElapsedFromTs = 0.0f;
   static bool hasPrev = false;
+  static String prevCaptureTime = "";  // 新增：保存上一帧captureTime用于ETDiff
 
   // 第一桨时重置
   if (snapshot.strokeNumber <= 1) {
     hasPrev = false;
     accumulatedElapsedFromTs = 0.0f;
+    prevCaptureTime = "";
   }
 
   // Timestamp 保留完整3位小数（毫秒精度），与 ElapsedTime 精度一致
@@ -365,7 +367,12 @@ void SDCardManager::appendPerStrokeCsv(const StrokeSnapshot &snapshot) {
   String srIntervalStr = "-";
 
   if (hasPrev) {
-    float etDiffOrigin = snapshot.elapsedSeconds - prevElapsed;
+    // ETDiff：直接用 calculateTimeDifference 计算两帧 captureTime 之差
+    // 与 TSDiff 使用完全相同的时间源，消除 elapsedSeconds millis回退导致的偏差
+    extern float calculateTimeDifference(const String &timestamp1,
+                                         const String &timestamp2);
+    float etDiff = calculateTimeDifference(prevCaptureTime, tsOut);
+
     float tsDiff = curTsSec - prevTsSec;
     // 处理跨分钟边界（例如 59.9 → 0.1，差值变成负数）
     if (tsDiff < -30.0f)
@@ -375,7 +382,7 @@ void SDCardManager::appendPerStrokeCsv(const StrokeSnapshot &snapshot) {
 
     accumulatedElapsedFromTs += tsDiff;
 
-    etDiffStr = String(etDiffOrigin, 3);
+    etDiffStr = String(etDiff, 3);
     tsDiffStr = String(tsDiff, 3);
 
     if (snapshot.strokeRate > 0.01f) {
@@ -402,6 +409,7 @@ void SDCardManager::appendPerStrokeCsv(const StrokeSnapshot &snapshot) {
 
   prevElapsed = snapshot.elapsedSeconds;
   prevTsSec = curTsSec;
+  prevCaptureTime = tsOut;  // 保存本帧 captureTime，供下一帧计算 ETDiff
   hasPrev = true;
 
   char line[640];
@@ -500,35 +508,34 @@ void SDCardManager::logStrokeSnapshot(const StrokeSnapshot &snapshot) {
     return;
   }
 
-  StrokeSnapshot normalized = snapshot;
-  normalizeStrokeSnapshot(normalized);
+  // 直接使用传入的 snapshot（已在 captureStroke 推队列前 normalize 过）
+  // 不再二次 normalize，保证与 MQTT 发送的数据完全一致
+  appendPerStrokeCsv(snapshot);
 
-  appendPerStrokeCsv(normalized);
-
-  stats.sumStrokeLength += normalized.strokeLength;
+  stats.sumStrokeLength += snapshot.strokeLength;
   stats.strokeLengthSamples++;
-  if (normalized.strokeNumber > stats.totalStrokes) {
-    stats.totalStrokes = normalized.strokeNumber;
+  if (snapshot.strokeNumber > stats.totalStrokes) {
+    stats.totalStrokes = snapshot.strokeNumber;
   }
-  stats.lastDistance = normalized.totalDistance;
+  stats.lastDistance = snapshot.totalDistance;
 
-  if (stats.startTimestamp.isEmpty() && !normalized.captureTime.isEmpty()) {
-    stats.startTimestamp = normalized.captureTime;
+  if (stats.startTimestamp.isEmpty() && !snapshot.captureTime.isEmpty()) {
+    stats.startTimestamp = snapshot.captureTime;
   }
 
   if (!stats.hasStartPosition &&
-      (normalized.lat != 0.0 || normalized.lon != 0.0)) {
-    stats.startLat = normalized.lat;
-    stats.startLon = normalized.lon;
+      (snapshot.lat != 0.0 || snapshot.lon != 0.0)) {
+    stats.startLat = snapshot.lat;
+    stats.startLon = snapshot.lon;
     stats.hasStartPosition = true;
   }
-  if (normalized.lat != 0.0 || normalized.lon != 0.0) {
-    stats.endLat = normalized.lat;
-    stats.endLon = normalized.lon;
+  if (snapshot.lat != 0.0 || snapshot.lon != 0.0) {
+    stats.endLat = snapshot.lat;
+    stats.endLon = snapshot.lon;
     stats.hasEndPosition = true;
   }
-  if (!normalized.captureTime.isEmpty()) {
-    stats.endTimestamp = normalized.captureTime;
+  if (!snapshot.captureTime.isEmpty()) {
+    stats.endTimestamp = snapshot.captureTime;
   }
 
   unsigned long now = millis();
