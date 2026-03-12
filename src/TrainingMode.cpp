@@ -4,6 +4,7 @@
 #include "SDCardManager.h"
 #include "StrokeDataManager.h"
 #include "WifiTransferManager.h"
+#include "esp_timer.h"
 
 // 外部变量声明
 extern bool rtcInitialized;
@@ -13,6 +14,10 @@ extern ConfigManager configManager;
 extern SDCardManager sdCardManager;
 extern StrokeDataManager strokeDataMgr;
 extern WifiTransferManager wifiTransfer;
+
+static inline uint64_t monotonicMs() {
+  return static_cast<uint64_t>(esp_timer_get_time() / 1000ULL);
+}
 
 void TrainingMode::start() {
   // 立即显示UI反馈，让用户感知到操作已响应
@@ -106,7 +111,7 @@ void TrainingMode::onStrokeDetected() {
   if (!active)
     return;
 
-  unsigned long now = millis();
+  uint64_t now = monotonicMs();
   lastStrokeTime = now;
 
   // 第一次检测到桨数变化，开始计时
@@ -129,8 +134,9 @@ void TrainingMode::onStrokeDetected() {
     paused = false;
     if (pauseStartTime > 0) {
       // 计算本次暂停的秒数并累加
-      unsigned long pauseDurationMs = now - pauseStartTime;
-      unsigned long pauseDurationSec = pauseDurationMs / 1000;
+      uint64_t pauseDurationMs = now - pauseStartTime;
+      unsigned long pauseDurationSec =
+          static_cast<unsigned long>(pauseDurationMs / 1000ULL);
       totalPausedSeconds += pauseDurationSec;
       totalPausedTime += pauseDurationMs; // 保留毫秒版本用于兼容
       pauseStartTime = 0;
@@ -145,7 +151,7 @@ void TrainingMode::checkPauseConditions() {
   if (!active || !running)
     return;
 
-  unsigned long now = millis();
+  uint64_t now = monotonicMs();
 
   // 20秒无桨数变化暂停计时
   if (lastStrokeTime > 0 && (now - lastStrokeTime) > 20000) {
@@ -167,9 +173,10 @@ void TrainingMode::update() {
 
   checkPauseConditions(); // 检查暂停条件
 
-  if (millis() - lastUpdate >= 1000) {
+  uint64_t now = monotonicMs();
+  if (now - lastUpdate >= 1000ULL) {
     updateDisplay();
-    lastUpdate = millis();
+    lastUpdate = now;
   }
 }
 
@@ -177,30 +184,30 @@ unsigned long TrainingMode::getElapsedSeconds() const {
   if (!active || !running)
     return 0;
 
-  unsigned long currentTime = millis();
-  unsigned long elapsed = currentTime - startTime - totalPausedTime;
+  uint64_t currentTime = monotonicMs();
+  uint64_t elapsed = currentTime - startTime - totalPausedTime;
 
   // 如果当前处于暂停状态，减去当前暂停的时间
   if (paused && pauseStartTime > 0) {
     elapsed -= (currentTime - pauseStartTime);
   }
 
-  return elapsed / 1000;
+  return static_cast<unsigned long>(elapsed / 1000ULL);
 }
 
 unsigned long TrainingMode::getElapsedMillis() const {
   if (!active || !running)
     return 0;
 
-  unsigned long currentTime = millis();
-  unsigned long elapsed = currentTime - startTime - totalPausedTime;
+  uint64_t currentTime = monotonicMs();
+  uint64_t elapsed = currentTime - startTime - totalPausedTime;
 
   // 如果当前处于暂停状态，减去当前暂停的时间
   if (paused && pauseStartTime > 0) {
     elapsed -= (currentTime - pauseStartTime);
   }
 
-  return elapsed;
+  return static_cast<unsigned long>(elapsed);
 }
 
 void TrainingMode::updateDisplay() {

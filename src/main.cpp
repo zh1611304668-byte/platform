@@ -15,6 +15,7 @@
 #include "TrainingMode.h"
 #include "UIManager.h"
 #include "WifiTransferManager.h"
+#include "esp_timer.h"
 #include "esp_task_wdt.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
@@ -1896,7 +1897,8 @@ String getRTCFullDateTime() {
   snprintf(dateTimeStr, sizeof(dateTimeStr),
            "%04d-%02d-%02d %02d:%02d:%02d.%03lu", datetime.getYear(),
            datetime.getMonth(), datetime.getDay(), datetime.getHour(),
-           datetime.getMinute(), datetime.getSecond(), millis() % 1000);
+           datetime.getMinute(), datetime.getSecond(),
+           (unsigned long)((esp_timer_get_time() / 1000ULL) % 1000ULL));
   return String(dateTimeStr);
 }
 

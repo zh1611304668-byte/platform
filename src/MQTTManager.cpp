@@ -8,6 +8,7 @@
 #include "PowerManager.h"
 #include "SDCardManager.h"
 #include "TrainingMode.h"
+#include "esp_timer.h"
 #include "esp_task_wdt.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
@@ -20,7 +21,54 @@ static String reusableJsonBuffer;
 static bool jsonBufferInitialized = false;
 
 static String lastValidTimestamp = "";
-static unsigned long lastValidTimeMillis = 0;
+static int64_t lastValidMonoUs = 0;
+static String addMillisecondsToTimestamp(const String &timestamp,
+                                         uint32_t addMs) {
+  if (timestamp.length() < 19) {
+    return timestamp;
+  }
+
+  int y = timestamp.substring(0, 4).toInt();
+  int m = timestamp.substring(5, 7).toInt();
+  int d = timestamp.substring(8, 10).toInt();
+  int h = timestamp.substring(11, 13).toInt();
+  int mi = timestamp.substring(14, 16).toInt();
+  int s = timestamp.substring(17, 19).toInt();
+  int ms = 0;
+  if (timestamp.length() >= 23 && timestamp.charAt(19) == '.') {
+    ms = timestamp.substring(20, 23).toInt();
+  }
+
+  struct tm t = {};
+  t.tm_year = y - 1900;
+  t.tm_mon = m - 1;
+  t.tm_mday = d;
+  t.tm_hour = h;
+  t.tm_min = mi;
+  t.tm_sec = s;
+  t.tm_isdst = -1;
+
+  time_t sec = mktime(&t);
+  if (sec == -1) {
+    return timestamp;
+  }
+
+  uint64_t totalMs = static_cast<uint64_t>(sec) * 1000ULL +
+                     static_cast<uint64_t>(ms) + addMs;
+  time_t outSec = static_cast<time_t>(totalMs / 1000ULL);
+  uint32_t outMs = static_cast<uint32_t>(totalMs % 1000ULL);
+
+  struct tm *outTm = localtime(&outSec);
+  if (!outTm) {
+    return timestamp;
+  }
+
+  char out[25];
+  snprintf(out, sizeof(out), "%04d-%02d-%02d %02d:%02d:%02d.%03u",
+           outTm->tm_year + 1900, outTm->tm_mon + 1, outTm->tm_mday,
+           outTm->tm_hour, outTm->tm_min, outTm->tm_sec, outMs);
+  return String(out);
+}
 
 class TaskWdtSuspendGuard {
 public:
@@ -65,87 +113,70 @@ String getValidTimestamp() {
   String currentTime;
   currentTime.reserve(24);
 
+  const int64_t nowUs = esp_timer_get_time();
+  const uint32_t monoMsPart =
+      static_cast<uint32_t>((nowUs / 1000LL) % 1000LL);
+
   if (rtcInitialized && rtcTimeSynced) {
     currentTime = getRTCFullDateTime();
   }
-
   if (currentTime.isEmpty() || currentTime.length() < 19) {
     currentTime = configManager.getCurrentFormattedDateTime();
   }
 
   bool timeValid = false;
   if (currentTime.length() >= 19) {
-
-    String yearStr = currentTime.substring(0, 4);
-    int year = yearStr.toInt();
-
-    if (year >= 2025) {
-      timeValid = true;
-    }
+    int year = currentTime.substring(0, 4).toInt();
+    timeValid = (year >= 2025);
   }
 
-  if (!timeValid && !lastValidTimestamp.isEmpty()) {
-    unsigned long elapsedMs = millis() - lastValidTimeMillis;
-    unsigned long elapsedSec = elapsedMs / 1000;
-
-    int year = lastValidTimestamp.substring(0, 4).toInt();
-    int month = lastValidTimestamp.substring(5, 7).toInt();
-    int day = lastValidTimestamp.substring(8, 10).toInt();
-    int hour = lastValidTimestamp.substring(11, 13).toInt();
-    int minute = lastValidTimestamp.substring(14, 16).toInt();
-    int second = lastValidTimestamp.substring(17, 19).toInt();
-
-    second += elapsedSec;
-    if (second >= 60) {
-      minute += second / 60;
-      second = second % 60;
+  if (timeValid) {
+    char base[25];
+    snprintf(base, sizeof(base), "%s.%03u", currentTime.substring(0, 19).c_str(),
+             monoMsPart);
+    currentTime = String(base);
+  } else if (!lastValidTimestamp.isEmpty() && lastValidMonoUs > 0) {
+    uint32_t elapsedMs =
+        static_cast<uint32_t>((nowUs - lastValidMonoUs) / 1000LL);
+    if (elapsedMs == 0) {
+      elapsedMs = 1;
     }
-    if (minute >= 60) {
-      hour += minute / 60;
-      minute = minute % 60;
-    }
-    if (hour >= 24) {
-      day += hour / 24;
-      hour = hour % 24;
-    }
-
-    char timeStr[20];
-    snprintf(timeStr, sizeof(timeStr), "%04d-%02d-%02d %02d:%02d:%02d", year,
-             month, day, hour, minute, second);
+    currentTime = addMillisecondsToTimestamp(lastValidTimestamp, elapsedMs);
+    timeValid = true;
+  } else {
+    Serial.println("[TIME] Invalid wall time, fallback to monotonic base");
+    uint32_t totalSec = static_cast<uint32_t>(nowUs / 1000000LL);
+    uint32_t hours = (totalSec / 3600U) % 24U;
+    uint32_t minutes = (totalSec / 60U) % 60U;
+    uint32_t seconds = totalSec % 60U;
+    char timeStr[25];
+    snprintf(timeStr, sizeof(timeStr), "1970-01-01 %02u:%02u:%02u.%03u", hours,
+             minutes, seconds, monoMsPart);
     currentTime = String(timeStr);
     timeValid = true;
   }
 
-  if (timeValid) {
-    lastValidTimestamp = currentTime;
-    lastValidTimeMillis = millis();
-  } else {
-
-    Serial.println("[TIME] ⚠️ 无有效时间源，请检查RTC和4G模块");
-
-    unsigned long totalMs = millis();
-    unsigned long seconds = totalMs / 1000;
-    unsigned long minutes = seconds / 60;
-    unsigned long hours = minutes / 60;
-    seconds = seconds % 60;
-    minutes = minutes % 60;
-    hours = hours % 24;
-    char timeStr[20];
-    snprintf(timeStr, sizeof(timeStr), "1970-01-01 %02lu:%02lu:%02lu", hours,
-             minutes, seconds);
-    currentTime = String(timeStr);
+  if (!lastValidTimestamp.isEmpty()) {
+    float diff = calculateTimeDifference(lastValidTimestamp, currentTime);
+    if (diff <= 0.0f) {
+      uint32_t elapsedMs =
+          (lastValidMonoUs > 0)
+              ? static_cast<uint32_t>((nowUs - lastValidMonoUs) / 1000LL)
+              : 1U;
+      if (elapsedMs == 0) {
+        elapsedMs = 1;
+      }
+      currentTime = addMillisecondsToTimestamp(lastValidTimestamp, elapsedMs);
+    }
   }
 
-  if (currentTime.length() == 19) {
-    unsigned long ms = millis() % 1000;
-    char msStr[5];
-    snprintf(msStr, sizeof(msStr), ".%03lu", ms);
-    currentTime += msStr;
+  if (timeValid) {
+    lastValidTimestamp = currentTime;
+    lastValidMonoUs = nowUs;
   }
 
   return currentTime;
 }
-
 unsigned long parseTimestampToSeconds(const String &timestamp) {
   if (timestamp.length() < 19) {
     Serial.printf(
