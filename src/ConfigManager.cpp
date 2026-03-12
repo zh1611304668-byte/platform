@@ -488,7 +488,7 @@ bool ConfigManager::makeHttpRequest(const String &endpoint, String &response) {
   const char *SERVER_HOST = platformHost.c_str();
   const int SERVER_PORT = platformPort;
 
-  Serial.printf("[HTTP] 📶 信号: %d\n", hybridModem->getSignalQuality());
+  Serial.printf("[HTTP] 信号: %d\n", hybridModem->getSignalQuality());
 
   Serial.printf("[HTTP] 🔌 连接服务 %s:%d...\n", SERVER_HOST, SERVER_PORT);
   if (!hybridHttpClient->connect(SERVER_HOST, SERVER_PORT)) {
@@ -498,7 +498,7 @@ bool ConfigManager::makeHttpRequest(const String &endpoint, String &response) {
   }
   Serial.println("[HTTP] Socket连接建立成功");
 
-  Serial.print("[HTTP] 📤 发送HTTP请求...");
+  Serial.print("[HTTP] 发送HTTP请求...");
   size_t requestSize = 0;
   requestSize += hybridHttpClient->print("GET " + String(PLATFORM_API_PATH) +
                                          endpoint + " HTTP/1.1\r\n");
@@ -516,7 +516,7 @@ bool ConfigManager::makeHttpRequest(const String &endpoint, String &response) {
   unsigned long lastYieldTime = millis();
   unsigned long lastStatusPrint = millis();
 
-  Serial.println("[HTTP] 🔄 等待服务器响应...");
+  Serial.println("[HTTP] 等待服务器响应...");
 
   while (millis() - startTime < 5000) {
 
@@ -533,7 +533,7 @@ bool ConfigManager::makeHttpRequest(const String &endpoint, String &response) {
     }
 
     if (bytesThisLoop > 0) {
-      Serial.printf("[HTTP] 📥 收到 %d 字节，总计 %d 字节\n", bytesThisLoop,
+      Serial.printf("[HTTP] 收到 %d 字节，总计 %d 字节\n", bytesThisLoop,
                     response.length());
     }
 
@@ -769,7 +769,7 @@ void ConfigManager::closeHttpConnection() {
 
   if (hybridHttpClient && hybridHttpClient->connected()) {
     hybridHttpClient->stop();
-    Serial.println("[CONFIG] 🔌 关闭HTTP连接");
+    Serial.println("[CONFIG] 关闭HTTP连接");
   }
 
   if (httpConnectionOpen) {
@@ -1162,7 +1162,7 @@ void ConfigManager::saveConfigToNVS() {
   }
 
   prefs.end();
-  Serial.printf("[CONFIG] ✅ 配置已缓存到NVS (设备=%d, MQTT=%d, 心率=%d)\n",
+  Serial.printf("[CONFIG] 配置已缓存到NVS (设备=%d, MQTT=%d, 心率=%d)\n",
                 deviceConfig.isValid, mqttConfig.isValid, count);
 }
 
@@ -1178,7 +1178,7 @@ void ConfigManager::loadConfigFromNVS() {
     deviceConfig.stdId = prefs.getString("dc_stdId", "");
     deviceConfig.isValid = true;
     deviceConfigStatus = CONFIG_SUCCESS;
-    Serial.printf("[CONFIG] 📦 NVS缓存: 设备 租户=%s 船只=%s\n",
+    Serial.printf("[CONFIG] NVS缓存: 设备 租户=%s 船只=%s\n",
                   deviceConfig.tenantCode.c_str(),
                   deviceConfig.boatCode.c_str());
   }
@@ -1194,7 +1194,7 @@ void ConfigManager::loadConfigFromNVS() {
     mqttConfig.isValid = (mqttConfig.host.length() > 0 && mqttConfig.port > 0);
     if (mqttConfig.isValid) {
       mqttConfigStatus = CONFIG_SUCCESS;
-      Serial.printf("[CONFIG] 📦 NVS缓存: MQTT %s:%d\n",
+      Serial.printf("[CONFIG] NVS缓存: MQTT %s:%d\n",
                     mqttConfig.host.c_str(), mqttConfig.port);
     }
   }
@@ -1213,16 +1213,16 @@ void ConfigManager::loadConfigFromNVS() {
       rowerList.push_back(rower);
     }
     rowerListStatus = CONFIG_SUCCESS;
-    Serial.printf("[CONFIG] 📦 NVS缓存: 心率设备 %d 个\n", count);
+    Serial.printf("[CONFIG] NVS缓存: 心率设备 %d 个\n", count);
   }
 
   prefs.end();
 
   if (deviceConfig.isValid || mqttConfig.isValid) {
-    Serial.println("[CONFIG] ✅ NVS缓存加载完成，设备可立即使用");
+    Serial.println("[CONFIG] NVS缓存加载完成，设备可立即使用");
     updateScreen4Display();
   } else {
-    Serial.println("[CONFIG] ℹ️ NVS无缓存，等待网络获取");
+    Serial.println("[CONFIG] NVS无缓存，等待网络获取");
   }
 }
 
@@ -1306,7 +1306,7 @@ String ConfigManager::buildFullUrl(const String &endpoint) const {
 bool ConfigManager::loadAllConfigsInOneConnection() {
 
   if (platformHost.isEmpty() || platformPort == 0) {
-    Serial.println("[CONFIG] ⚠️  平台地址未配置，跳过API获取");
+    Serial.println("[CONFIG] 平台地址未配置，跳过API获取");
     return false;
   }
 
@@ -1337,7 +1337,7 @@ bool ConfigManager::loadAllConfigsInOneConnection() {
 
   bool allSuccess = true;
 
-  Serial.println("[CONFIG] 📡 API1: 获取设备配置");
+  Serial.println("[CONFIG]  API1: 获取设备配置");
   deviceConfigStatus = CONFIG_LOADING;
   updateScreen4Display();
 
@@ -1370,7 +1370,7 @@ bool ConfigManager::loadAllConfigsInOneConnection() {
   updateScreen4Display();
   vTaskDelay(pdMS_TO_TICKS(100));
 
-  Serial.println("[CONFIG] 📡 API2: 获取心率设备列表");
+  Serial.println("[CONFIG] API2: 获取心率设备列表");
   rowerListStatus = CONFIG_LOADING;
   updateScreen4Display();
 
@@ -1384,7 +1384,7 @@ bool ConfigManager::loadAllConfigsInOneConnection() {
     bool api2Success = false;
     for (int retry = 0; retry < 3 && !api2Success; retry++) {
       if (retry > 0) {
-        Serial.printf("[CONFIG] 🔄 API2: 重试%d次获取心率设备列表\n", retry);
+        Serial.printf("[CONFIG] API2: 重试%d次获取心率设备列表\n", retry);
 
         vTaskDelay(pdMS_TO_TICKS(500));
         esp_task_wdt_reset();
@@ -1411,7 +1411,7 @@ bool ConfigManager::loadAllConfigsInOneConnection() {
   updateScreen4Display();
   vTaskDelay(pdMS_TO_TICKS(100));
 
-  Serial.println("[CONFIG] 📡 API3: 获取MQTT配置");
+  Serial.println("[CONFIG] API3: 获取MQTT配置");
   mqttConfigStatus = CONFIG_LOADING;
   updateScreen4Display();
 
@@ -1445,14 +1445,14 @@ bool ConfigManager::loadAllConfigsInOneConnection() {
     saveConfigToNVS();
     return true;
   } else {
-    Serial.println("[CONFIG] ⚠️ 部分配置加载失败");
+    Serial.println("[CONFIG] 部分配置加载失败");
     return false;
   }
 }
 
 bool ConfigManager::makeHttpRequestKeepAlive(const String &endpoint,
                                              String &response) {
-  Serial.printf("[HTTP] 📤 Keep-Alive请求: %s\n", endpoint.c_str());
+  Serial.printf("[HTTP] Keep-Alive请求: %s\n", endpoint.c_str());
 
   hybridHttpClient->print("GET " + endpoint + " HTTP/1.1\r\n");
   hybridHttpClient->print("Host: " + platformHost + "\r\n");
@@ -1561,7 +1561,7 @@ bool ConfigManager::safeReloadPlatformAddress(const String &newAddress) {
   }
 
   if (host == platformHost && port == platformPort) {
-    Serial.println("[CONFIG] ⚠️  新地址与当前地址相同，跳过重");
+    Serial.println("[CONFIG] 新地址与当前地址相同，跳过重试");
     return true;
   }
 
@@ -1578,7 +1578,7 @@ bool ConfigManager::safeReloadPlatformAddress(const String &newAddress) {
 
     extern bool requestNetworkSuspend();
     if (!requestNetworkSuspend()) {
-      Serial.println("[CONFIG] ⚠️  MQTT任务暂停超时，但继续重载");
+      Serial.println("[CONFIG]  MQTT任务暂停超时，但继续重载");
     }
 
     extern DataFlowManager dataFlow;
@@ -1728,13 +1728,13 @@ bool ConfigManager::safeReloadPlatformAddress(const String &newAddress) {
     if (waitCancelled) {
       stopConfigLoading();
       closeHttpConnection();
-      Serial.println("[CONFIG] ⚠️  配置加载被取消，准备切换新地址");
+      Serial.println("[CONFIG] 配置加载被取消，准备切换新地址");
     } else if (!reloadSuccess) {
-      Serial.println("[CONFIG] ⚠️  配置加载超时，但继续恢复任务");
+      Serial.println("[CONFIG] 配置加载超时，但继续恢复任务");
     }
 
   } else {
-    Serial.println("[CONFIG] ⚠️  PPP重新拨号失败，地址已保存，等待网络任务重试");
+    Serial.println("[CONFIG] PPP重新拨号失败，地址已保存，等待网络任务重试");
   }
 
   if (mqttTaskRunning) {

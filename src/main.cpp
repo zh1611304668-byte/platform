@@ -168,7 +168,7 @@ void resetLoopObservationWindow(unsigned long now) {
   loopObs.batteryUiSlowHits = 0;
 }
 
-inline void noteTrackedLoopLog() { loopObs.trackedLogEvents++; }
+inline void noteTrackedLoopLog() {}
 
 bool safeTakeMutex(SemaphoreHandle_t mutex, TickType_t timeout,
                    const char *mutexName) {
@@ -559,10 +559,6 @@ void loop() {
     lastSystemInteractionTime = millis();
   }
   unsigned long now = millis();
-  unsigned long loopStartUs = micros();
-  if (loopObs.windowStartMs == 0) {
-    resetLoopObservationWindow(now);
-  }
 
   // High frequency sensor update
   imu.update();
@@ -1683,94 +1679,8 @@ void loop() {
 
   // removed rogue xQueueReceive from here
 
-  // ==========================================================================================
-  // 自动关机逻辑 (10分钟无操作且不在训练模式)
-  // ==========================================================================================
-
-  // 1. 如果在训练模式，不断重置计时器
-  if (training.isActive()) {
-    lastSystemInteractionTime = now;
-  }
-
-  // 2. 如果K4正在被长按 (k4IsPressed)
-  if (k4IsPressed) {
-    lastSystemInteractionTime = now;
-  }
-
-  // 3. 触摸屏活跃时间 (LVGL自动维护)
-  uint32_t touchInactiveTime = lv_disp_get_inactive_time(NULL);
-
-  const unsigned long AUTO_SHUTDOWN_TIMEOUT = 600000;
-
-  if ((now - lastSystemInteractionTime > AUTO_SHUTDOWN_TIMEOUT) &&
-      (touchInactiveTime > AUTO_SHUTDOWN_TIMEOUT) && !training.isActive()) {
-
-    noteTrackedLoopLog();
-    Serial.println("[System] 💤 自动关机触发 (10分钟无操作)");
-    powerMgr.shutdown();
-  }
-
-  unsigned long loopElapsedUs = micros() - loopStartUs;
-  loopObs.loopCount++;
-  loopObs.totalLoopUs += loopElapsedUs;
-  if (loopElapsedUs > loopObs.maxLoopUs) {
-    loopObs.maxLoopUs = loopElapsedUs;
-  }
-
-  if (loopElapsedUs >= 20000) {
-    loopObs.slowLoopHits++;
-    switch (safeGetCurrentScreen()) {
-    case SCREEN1:
-      loopObs.slowLoopScreen1Hits++;
-      break;
-    case SCREEN2:
-      loopObs.slowLoopScreen2Hits++;
-      break;
-    case SCREEN3:
-      loopObs.slowLoopScreen3Hits++;
-      break;
-    case SCREEN4:
-      loopObs.slowLoopScreen4Hits++;
-      break;
-    }
-  }
-
-  if (now - loopObs.windowStartMs >= 30000) {
-    float avgLoopUs = (loopObs.loopCount > 0)
-                          ? (float)loopObs.totalLoopUs / (float)loopObs.loopCount
-                          : 0.0f;
-    float s1SensorAvgUs = (loopObs.screen1SensorUiHits > 0)
-                              ? (float)loopObs.screen1SensorUiTotalUs /
-                                    (float)loopObs.screen1SensorUiHits
-                              : 0.0f;
-    float s1TrainBindAvgUs = (loopObs.screen1TrainBindHits > 0)
-                                 ? (float)loopObs.screen1TrainBindTotalUs /
-                                       (float)loopObs.screen1TrainBindHits
-                                 : 0.0f;
-    float lvglAvgUs = (loopObs.lvglTimerHits > 0)
-                          ? (float)loopObs.lvglTimerTotalUs /
-                                (float)loopObs.lvglTimerHits
-                          : 0.0f;
-    float batteryAvgUs = (loopObs.batteryUiHits > 0)
-                             ? (float)loopObs.batteryUiTotalUs /
-                                   (float)loopObs.batteryUiHits
-                             : 0.0f;
-    Serial.printf(
-        "[LOOP-STATS] window_ms=%lu loops=%lu avg_us=%.1f max_us=%lu logs=%lu ui_hits=%lu battery_hits=%lu network_hits=%lu bt_hits=%lu bt_skips=%lu slow_hits=%lu slow_s1=%lu slow_s2=%lu slow_s3=%lu slow_s4=%lu s1_ui_avg=%.1f s1_ui_max=%lu s1_ui_slow=%lu s1_tb_avg=%.1f s1_tb_max=%lu s1_tb_slow=%lu lvgl_avg=%.1f lvgl_max=%lu lvgl_slow=%lu bat_avg=%.1f bat_max=%lu bat_slow=%lu\n",
-        now - loopObs.windowStartMs, loopObs.loopCount, avgLoopUs,
-        loopObs.maxLoopUs, loopObs.trackedLogEvents, loopObs.uiPollHits,
-        loopObs.batteryPollHits, loopObs.networkPollHits,
-        loopObs.bluetoothPollHits, loopObs.bluetoothPollSkipHits,
-        loopObs.slowLoopHits, loopObs.slowLoopScreen1Hits,
-        loopObs.slowLoopScreen2Hits, loopObs.slowLoopScreen3Hits,
-        loopObs.slowLoopScreen4Hits, s1SensorAvgUs,
-        loopObs.screen1SensorUiMaxUs, loopObs.screen1SensorUiSlowHits,
-        s1TrainBindAvgUs, loopObs.screen1TrainBindMaxUs,
-        loopObs.screen1TrainBindSlowHits, lvglAvgUs,
-        loopObs.lvglTimerMaxUs, loopObs.lvglTimerSlowHits, batteryAvgUs,
-        loopObs.batteryUiMaxUs, loopObs.batteryUiSlowHits);
-    resetLoopObservationWindow(now);
-  }
+  // 压测期间禁用main循环中的自动关机逻辑。
+  // lastSystemInteractionTime 仍保留给亮度管理使用。
 
   delay(5);
 }

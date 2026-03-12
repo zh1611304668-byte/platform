@@ -203,7 +203,7 @@
 #endif
 
 #ifndef CONFIG_BT_NIMBLE_MSYS1_BLOCK_COUNT
-#define CONFIG_BT_NIMBLE_MSYS1_BLOCK_COUNT 12
+#define CONFIG_BT_NIMBLE_MSYS1_BLOCK_COUNT 32
 #endif
 
 #ifndef CONFIG_BT_NIMBLE_RPA_TIMEOUT
@@ -231,7 +231,9 @@
 #define CONFIG_BT_NIMBLE_GAP_DEVICE_NAME_MAX_LEN 31
 
 /** @brief ACL Buffer count */
-#define CONFIG_BT_NIMBLE_ACL_BUF_COUNT 12
+#ifndef CONFIG_BT_NIMBLE_ACL_BUF_COUNT
+#define CONFIG_BT_NIMBLE_ACL_BUF_COUNT 24
+#endif
 
 /** @brief ACL Buffer size */
 #define CONFIG_BT_NIMBLE_ACL_BUF_SIZE 255
@@ -244,10 +246,14 @@
 #endif
 
 /** @brief Number of high priority HCI event buffers */
-#define CONFIG_BT_NIMBLE_HCI_EVT_HI_BUF_COUNT 30
+#ifndef CONFIG_BT_NIMBLE_HCI_EVT_HI_BUF_COUNT
+#define CONFIG_BT_NIMBLE_HCI_EVT_HI_BUF_COUNT 40
+#endif
 
 /** @brief Number of low priority HCI event buffers */
-#define CONFIG_BT_NIMBLE_HCI_EVT_LO_BUF_COUNT 8
+#ifndef CONFIG_BT_NIMBLE_HCI_EVT_LO_BUF_COUNT
+#define CONFIG_BT_NIMBLE_HCI_EVT_LO_BUF_COUNT 16
+#endif
 
 /** @brief Maximum number of connection oriented channels */
 #define CONFIG_BT_NIMBLE_L2CAP_COC_MAX_NUM 0

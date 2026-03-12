@@ -386,7 +386,10 @@ bool internalConnect(int idx) {
   cbPool[idx].devIdx = idx;
   client->setClientCallbacks(&cbPool[idx], false);
 
-  auto failExit = [&]() {
+  auto failExit = [&](const char *reason) {
+    Serial.printf("[CON] Failed %s(%s): %s (attempt=%d)\n", dev.name,
+                  dev.address, reason ? reason : "unknown",
+                  dev.connectionAttempts);
     safeDestroyClient(idx);
     setDevState(idx, DEV_BACKOFF);
     dev.nextRetryAtMs = millis() +
@@ -396,7 +399,7 @@ bool internalConnect(int idx) {
 
   BLEAddress addr(dev.address);
   if (!client->connect(addr, dev.addrType)) {
-    failExit();
+    failExit("connect");
     return false;
   }
 
@@ -407,7 +410,7 @@ bool internalConnect(int idx) {
   }
 
   if (!svc) {
-    failExit();
+    failExit("hr_service_0x180D_not_found");
     return false;
   }
 
@@ -418,7 +421,7 @@ bool internalConnect(int idx) {
   }
 
   if (!ch) {
-    failExit();
+    failExit("hr_char_0x2A37_not_found");
     return false;
   }
 
@@ -436,9 +439,12 @@ bool internalConnect(int idx) {
       }
     } catch (...) {
       // 通知注册失败，断开连接
-      failExit();
+      failExit("notify_subscribe_exception");
       return false;
     }
+  } else {
+    failExit("hr_char_not_notifiable");
+    return false;
   }
 
   // 只有在所有步骤都成功后才标记为已连接
@@ -967,13 +973,12 @@ void BT::setUploadSource(hr_device_t *dev) {
     safeLabelUpdate(ui_Label14, displayNameBuffer, "Label14(UploadSource)");
     safeLabelUpdate(ui_Label53, displayNameBuffer, "Label53(UploadSource)");
 
-    Serial.printf("[UPLOAD] Set upload source to raw='%s' display='%s'\n",
-                  dev->name, displayNameBuffer);
+    // 压测阶段静默：不打印上传源切换日志
     // 注意：心率值更新由心率事件处理机制负责，这里不重复更新避免冲突
   } else {
     safeLabelUpdate(ui_Label14, "未选择", "Label14(NoSource)");
     safeLabelUpdate(ui_Label53, "未选择", "Label53(NoSource)");
-    Serial.println("[UPLOAD] No upload source selected");
+    // 压测阶段静默：不打印上传源清空日志
     // 注意：心率值清理由主循环的心率UI更新逻辑负责，避免冲突
   }
 }

@@ -259,7 +259,7 @@ void switch_to_screen(ScreenId screen)
     }
     screen3_button_count = 0;
     screen3_buttons_created = false; // 重置标志
-    Serial.printf("[SCREEN3] 退出时清理了 %d 个按钮\n", cleanedCount);
+    // 压测阶段静默：不打印Screen3按钮清理日志
   }
 
   switch (screen) {
@@ -387,7 +387,7 @@ void syncScreen3FocusState() {
       // 找到了当前聚焦的按钮，同步索引变量
       if (safeGetScreen3SelectedIdx() != i) {
         safeSetScreen3SelectedIdx(i);
-        Serial.printf("[SCREEN3] 同步聚焦状态：触控聚焦到按钮 %d\n", i);
+        // 压测阶段静默：不打印Screen3聚焦同步日志
       }
       return;
     }

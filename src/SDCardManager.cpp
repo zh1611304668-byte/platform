@@ -424,36 +424,10 @@ void SDCardManager::appendPerStrokeCsv(const StrokeSnapshot &snapshot) {
 }
 
 void SDCardManager::logNmeaRaw(const String &nmea) {
-  static unsigned long nmeaCount = 0;
-  static unsigned long lastDebugPrint = 0;
-
-  nmeaCount++;
-
-  // 每10秒打印一次统计信息
-  if (millis() - lastDebugPrint > 10000) {
-    Serial.printf("[SD] NMEA stats: Total=%lu, Mounted=%d, Disabled=%d, "
-                  "Active=%d, FileOpen=%d\n",
-                  nmeaCount, cardMounted, disabled, stats.active,
-                  (bool)nmeaCsvFile);
-    lastDebugPrint = millis();
-  }
-
   if (!cardMounted || disabled || !stats.active) {
-    static unsigned long lastWarning = 0;
-    if (millis() - lastWarning > 10000) {
-      Serial.printf(
-          "[SD] NMEA not logged: mounted=%d, disabled=%d, active=%d\n",
-          cardMounted, disabled, stats.active);
-      lastWarning = millis();
-    }
     return;
   }
   if (!nmeaCsvFile) {
-    static unsigned long lastFileWarning = 0;
-    if (millis() - lastFileWarning > 10000) {
-      Serial.println("[SD] NMEA file not open!");
-      lastFileWarning = millis();
-    }
     return;
   }
 

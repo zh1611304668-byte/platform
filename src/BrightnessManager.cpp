@@ -78,13 +78,10 @@ uint8_t BrightnessManager::calculateTargetBrightness(unsigned long inactiveTime,
     return BRIGHTNESS_FULL;
   }
 
-  // 超过10分钟且不在训练模式下，进入深度睡眠（自动关机）
+  // 压测期间临时禁用自动关机：
+  // 超过10分钟时不进入深度睡眠，仅保持最低亮度。
   if (inactiveTime >= DIM_DELAY_5) {
-    Serial.println("[BrightnessManager] 10分钟无操作，设备自动关机...");
-    // 确保屏幕先完全熄灭再休眠
-    applyBrightness(0);
-    delay(100); 
-    esp_deep_sleep_start();
+    return BRIGHTNESS_LOW;
   }
 
   // 根据非活跃时间分级降低亮度
