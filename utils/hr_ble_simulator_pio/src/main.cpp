@@ -1,4 +1,4 @@
-﻿#include <Arduino.h>
+#include <Arduino.h>
 #include <BLE2902.h>
 #include <BLEDevice.h>
 #include <BLEServer.h>
@@ -264,6 +264,7 @@ void loop() {
     gLastHeartbeatMs = now;
     Serial.printf("[SIM] alive, uptime=%lu ms, connected=%d\n",
                   (unsigned long)now, gConnected ? 1 : 0);
+    printBleAddress();
   }
 
   maybeSimulateDrop();
