@@ -7,12 +7,7 @@
 #include "freertos/semphr.h"
 #include "freertos/task.h"
 #include <Arduino.h>
-#include <BLE2902.h>
-#include <BLEAdvertisedDevice.h>
-#include <BLEClient.h>
-#include <BLEDevice.h>
-#include <BLEScan.h>
-#include <BLEUtils.h>
+#include <NimBLEDevice.h>
 
 
 // 声明外部函数和变量
@@ -24,7 +19,7 @@ using namespace BT;
 
 namespace {
 // 常量定义
-const int SCAN_DURATION = 5;
+const int SCAN_DURATION = 2;
 const int SCAN_INTERVAL = 60000;           // Screen1等其他界面60秒扫描一次
 const int CONTINUOUS_SCAN_INTERVAL = 8000; // Screen3持续扫描间隔8秒
 const int DATA_TIMEOUT = 15000;
@@ -57,20 +52,7 @@ volatile bool autoConnectRequested = false;
 static hr_device_t *active = nullptr;
 
 // 预设设备表（扩展至7个）
-hr_device_t presets[NUM_PRESETS] = {{"", "", BLE_ADDR_TYPE_PUBLIC, false, false,
-                                     false, nullptr, 0, false, 0, 0, 0, 0, 0},
-                                    {"", "", BLE_ADDR_TYPE_PUBLIC, false, false,
-                                     false, nullptr, 0, false, 0, 0, 0, 0, 0},
-                                    {"", "", BLE_ADDR_TYPE_PUBLIC, false, false,
-                                     false, nullptr, 0, false, 0, 0, 0, 0, 0},
-                                    {"", "", BLE_ADDR_TYPE_PUBLIC, false, false,
-                                     false, nullptr, 0, false, 0, 0, 0, 0, 0},
-                                    {"", "", BLE_ADDR_TYPE_PUBLIC, false, false,
-                                     false, nullptr, 0, false, 0, 0, 0, 0, 0},
-                                    {"", "", BLE_ADDR_TYPE_PUBLIC, false, false,
-                                     false, nullptr, 0, false, 0, 0, 0, 0, 0},
-                                    {"", "", BLE_ADDR_TYPE_PUBLIC, false, false,
-                                     false, nullptr, 0, false, 0, 0, 0, 0, 0}};
+hr_device_t presets[NUM_PRESETS] = {};
 
 // 互斥锁保护presets数组
 SemaphoreHandle_t presetsMutex = xSemaphoreCreateMutex();
@@ -103,6 +85,115 @@ bool namePoolUsed[NUM_PRESETS] = {false, false, false, false,
 volatile bool connectionCountChanged = false;
 volatile int lastKnownConnectionCount = 0;
 
+volatile bool disconnectEvents[NUM_PRESETS] = {false};
+volatile bool cleanupRequested = false;
+
+void setDevState(int i, dev_state_t s) {
+  presets[i].state = s;
+  presets[i].connected = (s == DEV_CONNECTED);
+  presets[i].connecting = (s == DEV_CONNECTING);
+}
+
+void markConnectionCountDirtyImpl() {
+  connectionCountChanged = true;
+  lastKnownConnectionCount = -1;
+}
+
+void setDisconnectedState(int i) {
+  presets[i].connected = false;
+  presets[i].connecting = false;
+  presets[i].uploaded = false;
+  presets[i].lastHeartRate = 0;
+  presets[i].batteryLevel = -1;
+  presets[i].lastDataTime = 0;
+  setDevState(i, DEV_IDLE);
+}
+
+void safeDestroyClient(int i) {
+  if (!presets[i].client) {
+    return;
+  }
+  NimBLEClient *c = presets[i].client;
+  presets[i].client = nullptr;
+  try {
+    if (c->isConnected()) {
+      c->disconnect();
+    }
+  } catch (...) {}
+  NimBLEDevice::deleteClient(c);
+}
+
+void queueDisconnectEvent(int i) {
+  if (i >= 0 && i < NUM_PRESETS) {
+    disconnectEvents[i] = true;
+  }
+}
+
+bool hasConnectingDevice() {
+  for (int i = 0; i < NUM_PRESETS; ++i) {
+    if (presets[i].state == DEV_CONNECTING || presets[i].connecting) {
+      return true;
+    }
+  }
+  return false;
+}
+
+bool hasUnconnectedApiDevice() {
+  if (!configManager.isRowerListReady()) {
+    return true;
+  }
+  const auto &rowerList = configManager.getRowerList();
+  for (const auto &rower : rowerList) {
+    String btAddr = rower.btAddr;
+    btAddr.trim();
+    if (btAddr.isEmpty() || btAddr.equalsIgnoreCase("null")) {
+      continue;
+    }
+
+    bool isConnected = false;
+    for (int j = 0; j < NUM_PRESETS; ++j) {
+      if (presets[j].connected &&
+          String(presets[j].address).equalsIgnoreCase(btAddr)) {
+        isConnected = true;
+        break;
+      }
+    }
+    if (!isConnected) {
+      return true;
+    }
+  }
+  return false;
+}
+
+bool hasUndiscoveredApiDevice() {
+  if (!configManager.isRowerListReady()) {
+    return true;
+  }
+
+  const auto &rowerList = configManager.getRowerList();
+  for (const auto &rower : rowerList) {
+    String btAddr = rower.btAddr;
+    btAddr.trim();
+    if (btAddr.isEmpty() || btAddr.equalsIgnoreCase("null")) {
+      continue;
+    }
+
+    bool discovered = false;
+    for (int j = 0; j < NUM_PRESETS; ++j) {
+      if (presets[j].address[0] != '\0' &&
+          String(presets[j].address).equalsIgnoreCase(btAddr)) {
+        discovered = presets[j].found;
+        break;
+      }
+    }
+
+    if (!discovered) {
+      return true;
+    }
+  }
+  return false;
+}
+
 // 前向声明：HR 事件推送函数（定义在文件后部）
 void pushHREventInternal(int idx, int hr);
 
@@ -112,13 +203,21 @@ class MySecurity : public BLESecurityCallbacks {
   void onPassKeyNotify(uint32_t pass_key) {}
   bool onConfirmPIN(uint32_t pin) { return true; }
   bool onSecurityRequest() { return true; }
-  void onAuthenticationComplete(esp_ble_auth_cmpl_t cmpl) {
-    if (cmpl.success)
+  void onAuthenticationComplete(ble_gap_conn_desc *desc) {
+    if (desc && desc->sec_state.encrypted)
       Serial.println("[SEC] Pairing success");
     else
       Serial.println("[SEC] Pairing failed");
   }
 };
+
+struct MyClientCB : public BLEClientCallbacks {
+  int devIdx = -1;
+  void onConnect(BLEClient *pclient) override {}
+  void onDisconnect(BLEClient *pclient) override { queueDisconnectEvent(devIdx); }
+};
+
+MyClientCB cbPool[NUM_PRESETS];
 
 // 心率通知回调
 void notifyCallback(BLERemoteCharacteristic *ch, uint8_t *data, size_t len,
@@ -158,11 +257,11 @@ void notifyCallback(BLERemoteCharacteristic *ch, uint8_t *data, size_t len,
 
 // 扫描回调
 class PresetScanCb : public BLEAdvertisedDeviceCallbacks {
-  void onResult(BLEAdvertisedDevice advertisedDevice) override {
-    if (!advertisedDevice.haveName())
+  void onResult(BLEAdvertisedDevice *advertisedDevice) override {
+    if (!advertisedDevice || !advertisedDevice->haveName())
       return;
 
-    String addr = advertisedDevice.getAddress().toString().c_str();
+    String addr = advertisedDevice->getAddress().toString().c_str();
 
     // 检查是否在API心率带设备白名单中
     if (!BT::isAddressInWhitelist(addr))
@@ -177,7 +276,7 @@ class PresetScanCb : public BLEAdvertisedDeviceCallbacks {
           strcmp(presets[i].address, addr.c_str()) == 0) {
         deviceExists = true;
         presets[i].found = true;
-        presets[i].addrType = advertisedDevice.getAddressType();
+        presets[i].addrType = advertisedDevice->getAddressType();
         break;
       }
       if (presets[i].address[0] == '\0' && freeSlot == -1) {
@@ -206,7 +305,9 @@ class PresetScanCb : public BLEAdvertisedDeviceCallbacks {
         if (nameLen > 0 && nameLen <= 30) { // 最大30字符（留1个结束符）
           // 使用固定缓冲区池，避免动态内存分配
           if (!namePoolUsed[freeSlot]) {
-            xSemaphoreTake(presetsMutex, portMAX_DELAY);
+            if (xSemaphoreTake(presetsMutex, pdMS_TO_TICKS(5)) != pdTRUE) {
+              return;
+            }
 
             // 安全的字符串复制，确保不会溢出
             size_t copyLen = (nameLen < 30) ? nameLen : 30;
@@ -223,7 +324,7 @@ class PresetScanCb : public BLEAdvertisedDeviceCallbacks {
             memcpy(presets[freeSlot].address, addr.c_str(), copyAddrLen);
             presets[freeSlot].address[copyAddrLen] = '\0';
 
-            presets[freeSlot].addrType = advertisedDevice.getAddressType();
+            presets[freeSlot].addrType = advertisedDevice->getAddressType();
             presets[freeSlot].found = true;
             xSemaphoreGive(presetsMutex);
 
@@ -248,35 +349,54 @@ bool internalConnect(int idx) {
     return false;
 
   auto &dev = presets[idx];
-  dev.connecting = true;
+  if (dev.client && dev.client->isConnected()) {
+    setDevState(idx, DEV_CONNECTED);
+    return true;
+  }
+  setDevState(idx, DEV_CONNECTING);
   dev.connectionAttempts++;
+  Serial.printf("[CON] Connecting %s | heap=%u min=%u\n", dev.name,
+                heap_caps_get_free_size(MALLOC_CAP_8BIT),
+                heap_caps_get_minimum_free_size(MALLOC_CAP_8BIT));
 
   if (pBLEScan)
     pBLEScan->stop();
 
   // 清理旧连接
-  if (dev.client) {
-    if (dev.client->isConnected())
-      dev.client->disconnect();
-    delete dev.client;
-    dev.client = nullptr;
+  if (!dev.client) {
+    dev.client = BLEDevice::createClient();
+  } else {
+    try {
+      if (dev.client->isConnected()) {
+        dev.client->disconnect();
+      }
+    } catch (...) {}
   }
 
-  BLEClient *client = BLEDevice::createClient();
-  dev.client = client;
+  BLEClient *client = dev.client;
+  if (!client) {
+    setDevState(idx, DEV_BACKOFF);
+    dev.nextRetryAtMs = millis() +
+        (unsigned long)min(30000UL, (1000UL << min(dev.connectionAttempts, 5)));
+    markConnectionCountDirtyImpl();
+    return false;
+  }
 
   // 安全设置
-  BLEDevice::setEncryptionLevel(ESP_BLE_SEC_ENCRYPT);
-  BLEDevice::setSecurityCallbacks(new MySecurity());
-  BLESecurity *pSecurity = new BLESecurity();
-  pSecurity->setAuthenticationMode(ESP_LE_AUTH_REQ_SC_MITM_BOND);
-  pSecurity->setCapability(ESP_IO_CAP_NONE);
+  cbPool[idx].devIdx = idx;
+  client->setClientCallbacks(&cbPool[idx], false);
+
+  auto failExit = [&]() {
+    safeDestroyClient(idx);
+    setDevState(idx, DEV_BACKOFF);
+    dev.nextRetryAtMs = millis() +
+        (unsigned long)min(30000UL, (1000UL << min(dev.connectionAttempts, 5)));
+    markConnectionCountDirtyImpl();
+  };
 
   BLEAddress addr(dev.address);
   if (!client->connect(addr, dev.addrType)) {
-    delete client;
-    dev.client = nullptr;
-    dev.connecting = false;
+    failExit();
     return false;
   }
 
@@ -287,10 +407,7 @@ bool internalConnect(int idx) {
   }
 
   if (!svc) {
-    client->disconnect();
-    delete client;
-    dev.client = nullptr;
-    dev.connecting = false;
+    failExit();
     return false;
   }
 
@@ -301,16 +418,13 @@ bool internalConnect(int idx) {
   }
 
   if (!ch) {
-    client->disconnect();
-    delete client;
-    dev.client = nullptr;
-    dev.connecting = false;
+    failExit();
     return false;
   }
 
   if (ch->canNotify()) {
     try {
-      ch->registerForNotify(notifyCallback);
+      ch->subscribe(true, notifyCallback, false);
 
       // 启用通知
       BLERemoteDescriptor *cccd = ch->getDescriptor(BLEUUID((uint16_t)0x2902));
@@ -322,19 +436,16 @@ bool internalConnect(int idx) {
       }
     } catch (...) {
       // 通知注册失败，断开连接
-      client->disconnect();
-      delete client;
-      dev.client = nullptr;
-      dev.connecting = false;
+      failExit();
       return false;
     }
   }
 
   // 只有在所有步骤都成功后才标记为已连接
-  dev.connected = true;
-  dev.connecting = false;
+  setDevState(idx, DEV_CONNECTED);
   dev.lastDataTime = millis();
   dev.connectionAttempts = 0;
+  dev.nextRetryAtMs = 0;
   dev.batteryLevel = -1; // 初始化为-1，表示尚未获取到电量数据
 
   // Battery Service: 读取一次电量并尝试订阅
@@ -349,7 +460,7 @@ bool internalConnect(int idx) {
             dev.batteryLevel = (uint8_t)v[0];
         }
         if (bCh->canNotify() || bCh->canIndicate()) {
-          bCh->registerForNotify(batteryNotifyCallback);
+          bCh->subscribe(true, batteryNotifyCallback, false);
           try {
             BLERemoteDescriptor *cccd =
                 bCh->getDescriptor(BLEUUID((uint16_t)0x2902));
@@ -372,77 +483,82 @@ bool internalConnect(int idx) {
     setUploadSource(&dev);
   }
 
-  Serial.printf("[CON] Connected to %s\n", dev.name);
+  markConnectionCountDirtyImpl();
+  Serial.printf("[CON] Connected %s | heap=%u min=%u\n", dev.name,
+                heap_caps_get_free_size(MALLOC_CAP_8BIT),
+                heap_caps_get_minimum_free_size(MALLOC_CAP_8BIT));
   return true;
 }
 
 // 执行扫描和连接
 void performScanAndConnect() {
-  // 训练时禁止扫描和连接新设备，避免BLE连接操作阻塞CPU影响MQTT任务
-  // 注意：已连接的设备不受影响，心率/电量读取和上传继续正常工作
   if (training.isActive()) {
+    return;
+  }
+  if (!pBLEScan) {
+    return;
+  }
 
+  auto tryConnectFromCache = [&]() -> bool {
+    if (configManager.isRowerListReady()) {
+      const auto &rowerList = configManager.getRowerList();
+      for (size_t apiIdx = 0; apiIdx < rowerList.size(); apiIdx++) {
+        const auto &rower = rowerList[apiIdx];
+        String btAddr = rower.btAddr;
+        btAddr.trim();
+        if (btAddr.isEmpty() || btAddr.equalsIgnoreCase("null")) {
+          continue;
+        }
+
+        bool alreadyConnected = false;
+        for (int j = 0; j < NUM_PRESETS; ++j) {
+          if (presets[j].connected &&
+              String(presets[j].address).equalsIgnoreCase(btAddr)) {
+            alreadyConnected = true;
+            break;
+          }
+        }
+        if (alreadyConnected) {
+          continue;
+        }
+
+        for (int i = 0; i < NUM_PRESETS; ++i) {
+          if (presets[i].found && !presets[i].connected && !presets[i].connecting &&
+              presets[i].connectionAttempts < MAX_CONNECTION_ATTEMPTS) {
+            if (String(presets[i].address).equalsIgnoreCase(btAddr)) {
+              internalConnect(i);
+              return true;
+            }
+          }
+        }
+      }
+    } else {
+      for (int i = 0; i < NUM_PRESETS; ++i) {
+        if (presets[i].found && !presets[i].connected && !presets[i].connecting &&
+            presets[i].connectionAttempts < MAX_CONNECTION_ATTEMPTS) {
+          internalConnect(i);
+          return true;
+        }
+      }
+    }
+    return false;
+  };
+
+  if (tryConnectFromCache()) {
+    return;
+  }
+  if (configManager.isRowerListReady() && !hasUndiscoveredApiDevice()) {
     return;
   }
 
   scanning = true;
-
   pBLEScan->clearResults();
-  pBLEScan->start(SCAN_DURATION, false); // 同步阻塞5秒
+  pBLEScan->start(SCAN_DURATION, false);
   scanning = false;
 
-  // 按照API设备列表顺序连接设备（从上到下） - 修复版：避免重复连接
-  // 首先获取API设备列表
-  if (configManager.isRowerListReady()) {
-    const auto &rowerList = configManager.getRowerList();
-
-    // 按API列表顺序查找并连接设备
-    for (size_t apiIdx = 0; apiIdx < rowerList.size(); apiIdx++) {
-      const auto &rower = rowerList[apiIdx];
-
-      // 检查该API设备是否已连接（通过地址匹配）
-      bool alreadyConnected = false;
-      for (int j = 0; j < NUM_PRESETS; ++j) {
-        if (presets[j].connected &&
-            String(presets[j].address).equalsIgnoreCase(rower.btAddr)) {
-          alreadyConnected = true;
-
-          break;
-        }
-      }
-
-      if (alreadyConnected)
-        continue; // 跳过已连接的设备
-
-      // 在扫描结果中查找对应的设备
-      for (int i = 0; i < NUM_PRESETS; ++i) {
-        if (presets[i].found && !presets[i].connected &&
-            !presets[i].connecting &&
-            presets[i].connectionAttempts < MAX_CONNECTION_ATTEMPTS) {
-
-          String scannedAddr = String(presets[i].address);
-          if (scannedAddr.equalsIgnoreCase(rower.btAddr)) {
-
-            internalConnect(i);
-            break; // 找到匹配设备后跳出内层循环
-          }
-        }
-      }
-    }
-  } else {
-    // 如果API列表未就绪，降级使用原有的槽位顺序连接（但仍避免重复连接）
-
-    for (int i = 0; i < NUM_PRESETS; ++i) {
-      if (presets[i].found && !presets[i].connected && !presets[i].connecting &&
-          presets[i].connectionAttempts < MAX_CONNECTION_ATTEMPTS) {
-
-        internalConnect(i);
-      }
-    }
-  }
+  (void)tryConnectFromCache();
 }
 
-// 自动连接API设备
 void performAutoConnect() {
   Serial.println("[AUTO] 开始自动连接API设备");
 
@@ -455,60 +571,23 @@ void performAutoConnect() {
 
 // 安全清理BLE客户端连接
 void cleanupDevice(int deviceIndex) {
-  if (deviceIndex < 0 || deviceIndex >= NUM_PRESETS)
+  if (deviceIndex < 0 || deviceIndex >= NUM_PRESETS) {
     return;
-
-  hr_device_t &dev = presets[deviceIndex];
-
-  Serial.printf("[CLEANUP] Cleaning up device %d: %s\n", deviceIndex, dev.name);
-
-  // 先断开连接
-  if (dev.client) {
-    try {
-      if (dev.client->isConnected()) {
-        dev.client->disconnect();
-        // 短暂延时确保断开完成
-        vTaskDelay(pdMS_TO_TICKS(100));
-      }
-    } catch (...) {
-      Serial.printf("[CLEANUP] Exception during disconnect for device %d\n",
-                    deviceIndex);
-    }
-
-    // 安全删除客户端对象
-    try {
-      delete dev.client;
-      dev.client = nullptr;
-    } catch (...) {
-      Serial.printf(
-          "[CLEANUP] Exception during client deletion for device %d\n",
-          deviceIndex);
-      dev.client = nullptr; // 设为null避免悬垂指针
-    }
   }
 
-  // 重置设备状态
-  dev.connected = false;
-  dev.connecting = false;
-  dev.uploaded = false;
-  dev.lastHeartRate = 0;
-  dev.batteryLevel = -1;
-  dev.lastDataTime = 0;
-  dev.lastPrintTime = 0;
-  dev.connectionAttempts = 0;
-  dev.dataCount = 0;
-
-  // 如果这是活动设备，清除活动源
-  if (active == &dev) {
+  safeDestroyClient(deviceIndex);
+  setDisconnectedState(deviceIndex);
+  if (active == &presets[deviceIndex]) {
     setUploadSource(nullptr);
   }
-
+  markConnectionCountDirtyImpl();
   Serial.printf("[CLEANUP] Device %d cleanup completed\n", deviceIndex);
 }
 
-// 检查数据超时 - 修复版：区分连接超时和数据超时，保持设备信息持久性
 void checkDataTimeouts() {
   unsigned long now = millis();
+  static uint8_t disconnectProbeMisses[NUM_PRESETS] = {0};
+
   for (int i = 0; i < NUM_PRESETS; ++i) {
     if (presets[i].connected) {
       // 检查连接是否实际有效
@@ -521,41 +600,17 @@ void checkDataTimeouts() {
         }
       }
 
-      // 如果BLE连接实际已断开，清理连接状态但保持设备信息
+      // NimBLE在短时间窗口内可能返回瞬时false，这里做二次确认，避免误判。
       if (!actuallyConnected) {
-        Serial.printf("[TIMEOUT] Device %s(%s) BLE connection lost, cleaning "
-                      "connection only\n",
-                      presets[i].name, presets[i].address);
-
-        // 只清理连接状态，不清理设备发现信息
-        if (presets[i].client) {
-          try {
-            delete presets[i].client;
-          } catch (...) {
-          }
-          presets[i].client = nullptr;
+        if (++disconnectProbeMisses[i] >= 2) {
+          Serial.printf("[TIMEOUT] Device %s(%s) BLE disconnect confirmed\n",
+                        presets[i].name, presets[i].address);
+          queueDisconnectEvent(i);
+          disconnectProbeMisses[i] = 0;
         }
-
-        // 重置连接状态但保持设备信息
-        presets[i].connected = false;
-        presets[i].connecting = false;
-        presets[i].uploaded = false;
-        presets[i].lastHeartRate = 0;
-        presets[i].batteryLevel = -1;
-        presets[i].lastDataTime = 0;
-        presets[i].connectionAttempts = 0;
-
-        // 如果这是活动设备，清除活动源但保持UI按钮
-        if (active == &presets[i]) {
-          setUploadSource(nullptr);
-        }
-
-        // 重要：保持found状态和设备信息，让按钮继续显示
-        // presets[i].found = true;  // 保持发现状态
-        // 不清理地址和名称，让设备在Screen3中保持可见
-
-        continue; // 跳过数据超时检查
+        continue;
       }
+      disconnectProbeMisses[i] = 0;
 
       // 数据超时检查：如果连接有效但长时间无数据，给出警告但不断开
       if (now - presets[i].lastDataTime > DATA_TIMEOUT) {
@@ -577,91 +632,173 @@ void checkDataTimeouts() {
 
 // 后台任务
 void bleTask(void *) {
-  Serial.println("[BT] BLE任务启动 (无看门狗保护)");
+  Serial.println("[BT] BLE task started");
 
   unsigned long lastScanTime = 0;
   unsigned long lastTimeoutCheck = 0;
 
   while (true) {
+    esp_task_wdt_reset();
     unsigned long now = millis();
+    bool attemptedConnectThisLoop = false;
 
-    // 处理手动扫描请求
-    if (manualScanRequested) {
-      performScanAndConnect();
-      manualScanRequested = false;
-      lastScanTime = now; // 重置自动扫描计时器
-    }
-    // 处理自动连接请求
-    else if (autoConnectRequested) {
-      performAutoConnect();
-      autoConnectRequested = false;
-      lastScanTime = now; // 重置自动扫描计时器
-    }
-    // Screen3持续扫描模式
-    // Screen3等待API配置加载完成后再开始持续扫描
-    else if (continuousScanMode && !scanning &&
-             (now - lastContinuousScan > CONTINUOUS_SCAN_INTERVAL)) {
-      // 检查API配置是否已就绪
-      if (configManager.isRowerListReady()) {
-        performScanAndConnect();
-        lastContinuousScan = now;
-      } else {
-        // API配置未就绪，延长扫描间隔
-        lastContinuousScan =
-            now - CONTINUOUS_SCAN_INTERVAL + 3000; // 3秒后再次检查
+    for (int i = 0; i < NUM_PRESETS; ++i) {
+      if (disconnectEvents[i]) {
+        disconnectEvents[i] = false;
+        safeDestroyClient(i);
+        setDevState(i, DEV_BACKOFF);
+        presets[i].connectionAttempts = max(presets[i].connectionAttempts, 1);
+        presets[i].nextRetryAtMs = now +
+            (unsigned long)min(30000UL, (1000UL << min(presets[i].connectionAttempts, 5)));
+        if (active == &presets[i]) {
+          active = nullptr;
+        }
+        markConnectionCountDirtyImpl();
+        Serial.printf("[CB] Device %d disconnected -> BACKOFF\n", i);
       }
     }
-    // 定期扫描（获取到API数据后在所有界面都进行后台扫描） - 修复版：智能扫描
-    // 只要有心率带设备白名单就进行定期扫描，但避免不必要的扫描
-    else if (autoScanEnabled && !continuousScanMode && !scanning &&
-             (now - lastScanTime > SCAN_INTERVAL)) {
-      // 检查API配置是否已就绪
-      if (configManager.isRowerListReady()) {
-        // 检查是否有需要连接的设备（智能扫描）
-        bool hasDeviceToConnect = false;
-        const auto &rowerList = configManager.getRowerList();
 
-        for (const auto &rower : rowerList) {
-          bool isConnected = false;
-          // 检查该API设备是否已连接
-          for (int j = 0; j < NUM_PRESETS; ++j) {
-            if (presets[j].connected &&
-                String(presets[j].address).equalsIgnoreCase(rower.btAddr)) {
-              isConnected = true;
-              break;
-            }
+    if (cleanupRequested) {
+      cleanupRequested = false;
+      for (int i = 0; i < NUM_PRESETS; ++i) {
+        if (presets[i].client && !presets[i].client->isConnected()) {
+          queueDisconnectEvent(i);
+        }
+      }
+    }
+
+    if (connectReqIdx >= 0 && !hasConnectingDevice()) {
+      int req = connectReqIdx;
+      connectReqIdx = -1;
+      if (req >= 0 && req < NUM_PRESETS && presets[req].found &&
+          !presets[req].connected) {
+        internalConnect(req);
+        attemptedConnectThisLoop = true;
+        esp_task_wdt_reset();
+      }
+    }
+
+    if (!attemptedConnectThisLoop) {
+      for (int i = 0; i < NUM_PRESETS; ++i) {
+        if (presets[i].state == DEV_BACKOFF && presets[i].found) {
+          if (presets[i].connectionAttempts >= MAX_CONNECTION_ATTEMPTS) {
+            setDevState(i, DEV_IDLE);
+            continue;
           }
-          if (!isConnected) {
-            hasDeviceToConnect = true;
+          if (now >= presets[i].nextRetryAtMs) {
+            Serial.printf("[BT] BACKOFF retry device %d (%s) attempt=%d | heap=%u\n",
+                          i, presets[i].name, presets[i].connectionAttempts,
+                          heap_caps_get_free_size(MALLOC_CAP_8BIT));
+            internalConnect(i);
+            attemptedConnectThisLoop = true;
+            esp_task_wdt_reset();
+            vTaskDelay(pdMS_TO_TICKS(200));
             break;
           }
         }
+      }
+    }
 
-        if (hasDeviceToConnect) {
+    // Fast lane: once devices are discovered, chain-connect remaining devices
+    // without waiting for the next scan interval.
+    if (!attemptedConnectThisLoop && !hasConnectingDevice()) {
+      if (configManager.isRowerListReady()) {
+        const auto &rowerList = configManager.getRowerList();
+        for (const auto &rower : rowerList) {
+          String btAddr = rower.btAddr;
+          btAddr.trim();
+          if (btAddr.isEmpty() || btAddr.equalsIgnoreCase("null")) {
+            continue;
+          }
 
-          performScanAndConnect();
-        } else {
+          bool alreadyConnected = false;
+          for (int j = 0; j < NUM_PRESETS; ++j) {
+            if (presets[j].connected &&
+                String(presets[j].address).equalsIgnoreCase(btAddr)) {
+              alreadyConnected = true;
+              break;
+            }
+          }
+          if (alreadyConnected) {
+            continue;
+          }
+
+          for (int i = 0; i < NUM_PRESETS; ++i) {
+            if (!presets[i].found || presets[i].connected || presets[i].connecting) {
+              continue;
+            }
+            if (presets[i].state == DEV_BACKOFF ||
+                presets[i].connectionAttempts >= MAX_CONNECTION_ATTEMPTS) {
+              continue;
+            }
+            if (String(presets[i].address).equalsIgnoreCase(btAddr)) {
+              internalConnect(i);
+              attemptedConnectThisLoop = true;
+              esp_task_wdt_reset();
+              vTaskDelay(pdMS_TO_TICKS(150));
+              break;
+            }
+          }
+          if (attemptedConnectThisLoop) {
+            break;
+          }
         }
-        lastScanTime = now;
       } else {
-        // API配置未就绪，延长扫描间隔，避免频繁检查
-        lastScanTime = now - SCAN_INTERVAL + 10000; // 10秒后再次检查
-        static uint32_t lastApiWaitMsg = 0;
-        if (now - lastApiWaitMsg > 30000) { // 30秒提示一次
-          Serial.println(
-              "[SCAN] 等待API心率带设备列表加载完成后开始后台扫描...");
-          lastApiWaitMsg = now;
+        for (int i = 0; i < NUM_PRESETS; ++i) {
+          if (!presets[i].found || presets[i].connected || presets[i].connecting) {
+            continue;
+          }
+          if (presets[i].state == DEV_BACKOFF ||
+              presets[i].connectionAttempts >= MAX_CONNECTION_ATTEMPTS) {
+            continue;
+          }
+          internalConnect(i);
+          attemptedConnectThisLoop = true;
+          esp_task_wdt_reset();
+          vTaskDelay(pdMS_TO_TICKS(150));
+          break;
         }
       }
     }
 
-    // 处理连接请求
-    if (connectReqIdx >= 0) {
-      internalConnect(connectReqIdx);
-      connectReqIdx = -1;
+    if (!attemptedConnectThisLoop && manualScanRequested) {
+      performScanAndConnect();
+      esp_task_wdt_reset();
+      manualScanRequested = false;
+      lastScanTime = now;
+    }
+    else if (!attemptedConnectThisLoop && autoConnectRequested) {
+      performAutoConnect();
+      esp_task_wdt_reset();
+      autoConnectRequested = false;
+      lastScanTime = now;
+    }
+    else if (!attemptedConnectThisLoop &&
+             continuousScanMode && !scanning && !hasConnectingDevice() &&
+             (now - lastContinuousScan > CONTINUOUS_SCAN_INTERVAL)) {
+      if (configManager.isRowerListReady() && hasUndiscoveredApiDevice()) {
+        performScanAndConnect();
+        esp_task_wdt_reset();
+        lastContinuousScan = now;
+      } else {
+        lastContinuousScan = now - CONTINUOUS_SCAN_INTERVAL + 3000;
+      }
+    }
+    else if (!attemptedConnectThisLoop &&
+             autoScanEnabled && !continuousScanMode && !scanning &&
+             !hasConnectingDevice() &&
+             (now - lastScanTime > SCAN_INTERVAL)) {
+      if (configManager.isRowerListReady()) {
+        if (hasUndiscoveredApiDevice()) {
+          performScanAndConnect();
+          esp_task_wdt_reset();
+        }
+        lastScanTime = now;
+      } else {
+        lastScanTime = now - SCAN_INTERVAL + 10000;
+      }
     }
 
-    // 检查数据超时
     if (now - lastTimeoutCheck > 5000) {
       checkDataTimeouts();
       lastTimeoutCheck = now;
@@ -737,12 +874,45 @@ void pollUIEventsInternal() {
 String BT::shortName(const char *raw) { return makeDisplayName(raw); }
 
 void BT::begin() {
+  Serial.printf("[BT] Reset reason: %d\n", (int)esp_reset_reason());
+  Serial.printf("[BT] Free heap: %u bytes, min: %u bytes\n",
+                heap_caps_get_free_size(MALLOC_CAP_8BIT),
+                heap_caps_get_minimum_free_size(MALLOC_CAP_8BIT));
+  Serial.printf("[BT] NimBLE max connections: %d\n",
+                (int)CONFIG_BT_NIMBLE_MAX_CONNECTIONS);
+
   BLEDevice::init("RowingMonitor");
+
+  static MySecurity securityCallbacks;
+  BLEDevice::setSecurityCallbacks(&securityCallbacks);
+  static BLESecurity security;
+  security.setAuthenticationMode(ESP_LE_AUTH_REQ_SC_MITM_BOND);
+  security.setCapability(ESP_IO_CAP_NONE);
+
+  for (int i = 0; i < NUM_PRESETS; ++i) {
+    presets[i].name = "";
+    presets[i].address[0] = '\0';
+    presets[i].addrType = BLE_ADDR_TYPE_PUBLIC;
+    presets[i].found = false;
+    presets[i].uploaded = false;
+    presets[i].client = nullptr;
+    presets[i].lastHeartRate = 0;
+    presets[i].lastDataTime = 0;
+    presets[i].lastPrintTime = 0;
+    presets[i].connectionAttempts = 0;
+    presets[i].dataCount = 0;
+    presets[i].batteryLevel = -1;
+    presets[i].nextRetryAtMs = 0;
+    setDevState(i, DEV_IDLE);
+    disconnectEvents[i] = false;
+  }
+
   pBLEScan = BLEDevice::getScan();
   pBLEScan->setAdvertisedDeviceCallbacks(new PresetScanCb());
   pBLEScan->setActiveScan(true);
   pBLEScan->setInterval(100);
   pBLEScan->setWindow(99);
+  markConnectionCountDirtyImpl();
 }
 
 void BT::startTask() {
@@ -809,15 +979,11 @@ void BT::setUploadSource(hr_device_t *dev) {
 }
 
 bool BT::connectToPreset(int idx) {
-  xSemaphoreTake(presetsMutex, portMAX_DELAY);
-  bool ret = internalConnect(idx);
-  xSemaphoreGive(presetsMutex);
-  return ret;
+  connectReqIdx = idx;
+  return true;
 }
 void BT::requestConnect(int idx) {
-  xSemaphoreTake(presetsMutex, portMAX_DELAY);
   connectReqIdx = idx;
-  xSemaphoreGive(presetsMutex);
 }
 
 void BT::triggerScan() { manualScanRequested = true; }
@@ -914,16 +1080,10 @@ int BT::getFoundDeviceCount() {
 }
 
 int BT::getConnectedCount() {
-  int currentCount = getConnectedCountImpl();
-
-  // 检查连接数量是否变化（事件驱动）
-  if (currentCount != lastKnownConnectionCount) {
-    connectionCountChanged = true;
-    lastKnownConnectionCount = currentCount;
-  }
-
-  return currentCount;
+  return getConnectedCountImpl();
 }
+
+void BT::markConnectionCountDirty() { markConnectionCountDirtyImpl(); }
 
 // 检查连接数量是否发生变化（事件驱动）
 bool BT::hasConnectionCountChanged() { return connectionCountChanged; }
@@ -939,213 +1099,7 @@ int BT::getBatteryLevel(int idx) {
 }
 
 void BT::cleanupDisconnectedDevices() {
-  static uint32_t lastCleanupTime = 0;
-  uint32_t now = millis();
-
-  // 限制清理频率，避免过度清理影响性能
-  if (now - lastCleanupTime < 5000) { // 最少5秒间隔
-    return;
-  }
-  lastCleanupTime = now;
-
-  int cleanedCount = 0;
-
-  for (int i = 0; i < NUM_PRESETS; ++i) {
-    // 先获取信号量检查状态
-    if (xSemaphoreTake(presetsMutex, pdMS_TO_TICKS(100)) != pdTRUE) {
-      Serial.printf("[BT] Failed to acquire mutex for device %d, skipping\n",
-                    i);
-      continue;
-    }
-
-    // 添加设备有效性检查
-    if (i < 0 || i >= NUM_PRESETS) {
-      Serial.printf("[BT] Invalid device index %d, skipping\n", i);
-      xSemaphoreGive(presetsMutex);
-      continue;
-    }
-
-    // 检查设备是否需要清理
-    bool needsCleanup = false;
-    BLEClient *clientToCleanup = nullptr;
-    bool wasActive = false;
-    String deviceName = ""; // 安全复制设备名称
-
-    // 安全地检查设备状态
-    try {
-      // 复制设备名称用于日志输出
-      if (presets[i].name != nullptr && strlen(presets[i].name) > 0) {
-        deviceName = String(presets[i].name);
-      } else {
-        deviceName = "未知设备";
-      }
-
-      // 检查客户端指针的有效性 - 增强内存安全检查
-      if (presets[i].client != nullptr) {
-        // 保存客户端指针并验证内存地址有效性
-        BLEClient *tempClient = presets[i].client;
-
-        // 检查指针是否在合理的内存范围内
-        if ((uintptr_t)tempClient < 0x1000 ||
-            (uintptr_t)tempClient > 0x50000000) {
-          Serial.printf(
-              "[BT] Invalid client pointer 0x%08x for device %d, skipping\n",
-              (uintptr_t)tempClient, i);
-          presets[i].client = nullptr;
-          presets[i].connected = false;
-          presets[i].connecting = false;
-          xSemaphoreGive(presetsMutex);
-          continue;
-        }
-
-        // 进一步验证客户端对象是否有效
-        try {
-          bool isConnected = tempClient->isConnected();
-
-          if (!presets[i].connected && tempClient) {
-            needsCleanup = true;
-            clientToCleanup = tempClient;
-          } else if (!isConnected && presets[i].connected) {
-            needsCleanup = true;
-            clientToCleanup = tempClient;
-            presets[i].connected = false;
-          }
-        } catch (...) {
-          // 客户端对象已损坏，安全清理
-          Serial.printf(
-              "[BT] Client object corrupted for device %d, safe cleanup\n", i);
-          presets[i].client = nullptr;
-          presets[i].connected = false;
-          presets[i].connecting = false;
-          // 不进行delete操作，避免崩溃
-          needsCleanup = false;
-          clientToCleanup = nullptr;
-        }
-      }
-
-      // 检查是否是活动设备
-      wasActive = (active == &presets[i]);
-
-    } catch (...) {
-      Serial.printf(
-          "[BT] Exception while checking device %d status, skipping\n", i);
-      xSemaphoreGive(presetsMutex);
-      continue;
-    }
-
-    // 修复版：保持设备信息持久性 - 不清理发现状态
-    // 即使断连也保持设备在Screen3中可见，方便重连
-    if (!presets[i].connected && presets[i].found) {
-      Serial.printf("[BT] Device %d (%s) disconnected but keeping discovery "
-                    "info for reconnection\n",
-                    i, deviceName.c_str());
-      // 不清理found状态、地址和名称，让设备保持在Screen3列表中
-      // presets[i].found = false;        // 保持true
-      // presets[i].address[0] = '\0';    // 保持地址
-      // namePoolUsed[i] = false;         // 保持名称池
-      // presets[i].name = "";            // 保持名称
-    }
-
-    // 如果需要清理，先重置状态，然后释放信号量
-    if (needsCleanup) {
-      Serial.printf("[BT] Cleaning up device %d: %s\n", i, deviceName.c_str());
-
-      // 重置状态（除了client指针，稍后处理）
-      presets[i].connected = false;
-      presets[i].connecting = false;
-      presets[i].lastHeartRate = 0;
-      presets[i].batteryLevel = -1;
-      // 注意：不在这里设置client = nullptr，避免影响clientToCleanup
-
-      // 如果这是活动设备，清除活动源
-      if (wasActive) {
-        try {
-          setUploadSource(nullptr);
-        } catch (...) {
-          Serial.printf(
-              "[BT] Exception while clearing active source for device %d\n", i);
-        }
-      }
-    }
-
-    // 释放信号量
-    xSemaphoreGive(presetsMutex);
-
-    // 在信号量外进行耗时的客户端清理操作
-    if (needsCleanup && clientToCleanup) {
-      try {
-        // 再次验证客户端指针的有效性
-        if (clientToCleanup != nullptr &&
-            (uintptr_t)clientToCleanup >= 0x1000 &&
-            (uintptr_t)clientToCleanup <= 0x50000000) {
-
-          try {
-            // 尝试安全断开连接
-            if (clientToCleanup->isConnected()) {
-              clientToCleanup->disconnect();
-              vTaskDelay(pdMS_TO_TICKS(50));
-            }
-          } catch (...) {
-            Serial.printf("[BT] Exception during disconnect for device %d\n",
-                          i);
-          }
-
-          // 使用更安全的删除方式，增加额外检查
-          try {
-            // 再次检查内存有效性
-            volatile uint32_t *testPtr = (volatile uint32_t *)clientToCleanup;
-            uint32_t testValue = *testPtr; // 尝试读取内存
-            (void)testValue;               // 避免未使用变量警告
-
-            delete clientToCleanup;
-
-            // 只有在成功删除后才设置为nullptr
-            if (xSemaphoreTake(presetsMutex, pdMS_TO_TICKS(100)) == pdTRUE) {
-              presets[i].client = nullptr;
-              xSemaphoreGive(presetsMutex);
-            }
-
-            cleanedCount++;
-            Serial.printf("[BT] Successfully cleaned device %d: %s\n", i,
-                          deviceName.c_str());
-          } catch (...) {
-            Serial.printf("[BT] Memory access failed during deletion for "
-                          "device %d, memory may be corrupted\n",
-                          i);
-            // 不执行delete，但仍需清空指针避免重复访问
-            if (xSemaphoreTake(presetsMutex, pdMS_TO_TICKS(100)) == pdTRUE) {
-              presets[i].client = nullptr;
-              xSemaphoreGive(presetsMutex);
-            }
-          }
-        } else {
-          Serial.printf("[BT] Invalid client pointer detected during cleanup "
-                        "for device %d\n",
-                        i);
-          // 清空无效指针
-          if (xSemaphoreTake(presetsMutex, pdMS_TO_TICKS(100)) == pdTRUE) {
-            presets[i].client = nullptr;
-            xSemaphoreGive(presetsMutex);
-          }
-        }
-      } catch (...) {
-        Serial.printf("[BT] General exception during cleanup of device %d\n",
-                      i);
-      }
-    }
-
-    // 强制垃圾回收和内存检查
-    if (needsCleanup) {
-      vTaskDelay(pdMS_TO_TICKS(10)); // 给系统一点时间处理内存释放
-    }
-  }
-
-  if (cleanedCount > 0) {
-    Serial.printf("[BT] Cleanup completed: %d devices cleaned\n", cleanedCount);
-
-    // 强制垃圾回收以释放内存
-    // ESP.gc();  // 如果支持的话
-  }
+  cleanupRequested = true;
 }
 
 void BT::pushHREvent(int idx, int hr) { pushHREventInternal(idx, hr); }

@@ -426,6 +426,9 @@ void ConfigManager::refreshConfig() {
   deviceConfigStatus = CONFIG_IDLE;
   mqttConfigStatus = CONFIG_IDLE;
   rtkConfigStatus = CONFIG_IDLE;
+  
+  rowerList.clear();
+  rowerListStatus = CONFIG_IDLE;
 
   closeHttpConnection();
 }
@@ -1147,8 +1150,8 @@ void ConfigManager::saveConfigToNVS() {
     prefs.putBool("mq_valid", true);
   }
 
-  // 保存 RowerList（最多5个）
-  int count = min((int)rowerList.size(), 5);
+  // 保存 RowerList（最多10个）
+  int count = min((int)rowerList.size(), 10);
   prefs.putInt("rw_count", count);
   for (int i = 0; i < count; i++) {
     String prefix = "rw" + String(i) + "_";
@@ -1371,43 +1374,40 @@ bool ConfigManager::loadAllConfigsInOneConnection() {
   rowerListStatus = CONFIG_LOADING;
   updateScreen4Display();
 
-  String api2Endpoint =
-      String(PLATFORM_API_PATH) +
-      "/basic/heart-rate-monitor/deviceRowerList?tenantCode=" +
-      deviceConfig.tenantCode + "&boatCode=" + deviceConfig.boatCode;
-  String api2Response;
+    String api2Endpoint =
+        String(PLATFORM_API_PATH) +
+        "/basic/heart-rate-monitor/deviceRowerList?tenantCode=" +
+        deviceConfig.tenantCode + "&boatCode=" + deviceConfig.boatCode;
+    Serial.printf("[CONFIG] API2 URL: %s\n", buildFullUrl(api2Endpoint).c_str());
+    String api2Response;
 
-  bool api2Success = false;
-  for (int retry = 0; retry < 3 && !api2Success; retry++) {
-    if (retry > 0) {
-      Serial.printf("[CONFIG] 🔄 API2: 重试%d次获取心率设备列表\n", retry);
+    bool api2Success = false;
+    for (int retry = 0; retry < 3 && !api2Success; retry++) {
+      if (retry > 0) {
+        Serial.printf("[CONFIG] 🔄 API2: 重试%d次获取心率设备列表\n", retry);
 
-      vTaskDelay(pdMS_TO_TICKS(500));
-      esp_task_wdt_reset();
-      vTaskDelay(pdMS_TO_TICKS(500));
-      esp_task_wdt_reset();
-    }
+        vTaskDelay(pdMS_TO_TICKS(500));
+        esp_task_wdt_reset();
+        vTaskDelay(pdMS_TO_TICKS(500));
+        esp_task_wdt_reset();
+      }
 
-    if (makeHttpRequestKeepAlive(api2Endpoint, api2Response)) {
-      if (parseRowerListResponse(api2Response)) {
-        rowerListStatus = CONFIG_SUCCESS;
-        Serial.printf("[CONFIG]  API2: 心率设备列表获取成功 (%d个设置)\n",
-                      rowerList.size());
-        api2Success = true;
-      } else {
-        Serial.printf("[CONFIG] API2: JSON解析失败 (尝试%d/3)\n", retry + 1);
-        if (retry == 2) {
-          rowerListStatus = CONFIG_FAILED;
+      if (makeHttpRequestKeepAlive(api2Endpoint, api2Response)) {
+        if (parseRowerListResponse(api2Response)) {
+          rowerListStatus = CONFIG_SUCCESS;
+          Serial.printf("[CONFIG]  API2: 心率设备列表获取成功 (%d个设置)\n",
+                        rowerList.size());
+          api2Success = true;
+        } else {
+          Serial.printf("[CONFIG] API2: JSON解析失败 (尝试%d/3)\n", retry + 1);
+          if (retry == 2) {
+            rowerListStatus = CONFIG_FAILED;
+          }
         }
-      }
-    } else {
-      Serial.printf("[CONFIG]  API2: HTTP请求失败 (尝试%d/3)\n", retry + 1);
-      if (retry == 2) {
-        rowerListStatus = CONFIG_FAILED;
+      } else {
+        Serial.printf("[CONFIG]  API2: HTTP请求失败 (尝试%d/3)\n", retry + 1);
       }
     }
-  }
-
   updateScreen4Display();
   vTaskDelay(pdMS_TO_TICKS(100));
 

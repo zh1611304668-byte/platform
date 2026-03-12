@@ -1,4 +1,4 @@
-#include "BluetoothManager.h"
+﻿#include "BluetoothManager.h"
 #include "BrightnessManager.h"
 #include "CellularManager.h"
 #include "ConfigManager.h"
@@ -312,7 +312,6 @@ bool screen3_buttons_created = false;
 bool boot_auto_once_done = false;
 uint8_t boot_auto_once_stage = 0;
 uint32_t boot_auto_once_ts = 0;
-int boot_auto_target_idx = -1;
 
 uint32_t uiUpdatesPerSec = 0;
 
@@ -520,7 +519,6 @@ void setup() {
   pinMode(K4_PIN, INPUT_PULLUP);
 
   BT::begin();
-  BT::startTask();
 
   keyQueue = xQueueCreate(KEY_QUEUE_SIZE, sizeof(KeyEvent));
   if (!keyQueue) {
@@ -545,7 +543,6 @@ void setup() {
   boot_auto_once_done = false;
   boot_auto_once_stage = 0;
   boot_auto_once_ts = millis();
-  boot_auto_target_idx = -1;
 }
 
 void optimizeTaskPriorities() { vTaskPrioritySet(NULL, 2); }
@@ -725,35 +722,15 @@ void loop() {
       break;
     }
     case 1: {
-      if (BT::getFoundDeviceCount() > 0) {
-        for (int i = 0; i < BT::NUM_PRESETS; ++i) {
-          auto &d = BT::devices()[i];
-          if (d.found && d.address[0] != '\0') {
-            boot_auto_target_idx = i;
-            break;
-          }
-        }
-        if (boot_auto_target_idx >= 0) {
-          BT::requestConnect(boot_auto_target_idx);
-          boot_auto_once_stage = 2;
-          boot_auto_once_ts = now;
-        }
-      }
-      if (now - boot_auto_once_ts > 10000) {
-        boot_auto_once_done = true;
-      }
-      break;
-    }
-    case 2: {
-      if (boot_auto_target_idx >= 0) {
-        auto &d = BT::devices()[boot_auto_target_idx];
+      for (int i = 0; i < BT::NUM_PRESETS; ++i) {
+        auto &d = BT::devices()[i];
         if (d.connected) {
           BT::setUploadSource(&d);
-          boot_auto_once_stage = 3;
           boot_auto_once_done = true;
+          break;
         }
       }
-      if (now - boot_auto_once_ts > 10000) {
+      if (now - boot_auto_once_ts > 15000) {
         boot_auto_once_done = true;
       }
       break;
@@ -1707,7 +1684,7 @@ void loop() {
   // removed rogue xQueueReceive from here
 
   // ==========================================================================================
-  // 自动关机逻辑 (5分钟无操作且不在训练模式)
+  // 自动关机逻辑 (10分钟无操作且不在训练模式)
   // ==========================================================================================
 
   // 1. 如果在训练模式，不断重置计时器
@@ -1723,13 +1700,13 @@ void loop() {
   // 3. 触摸屏活跃时间 (LVGL自动维护)
   uint32_t touchInactiveTime = lv_disp_get_inactive_time(NULL);
 
-  const unsigned long AUTO_SHUTDOWN_TIMEOUT = 300000;
+  const unsigned long AUTO_SHUTDOWN_TIMEOUT = 600000;
 
   if ((now - lastSystemInteractionTime > AUTO_SHUTDOWN_TIMEOUT) &&
       (touchInactiveTime > AUTO_SHUTDOWN_TIMEOUT) && !training.isActive()) {
 
     noteTrackedLoopLog();
-    Serial.println("[System] 💤 自动关机触发 (5分钟无操作)");
+    Serial.println("[System] 💤 自动关机触发 (10分钟无操作)");
     powerMgr.shutdown();
   }
 
@@ -1905,6 +1882,7 @@ void networkInitTask(void *pvParameters) {
       networkRetryStartTime = millis();
       Serial.printf("[网络任务] 🔻 网络初始化失败，优雅降级%d分钟\n",
                     NETWORK_RETRY_RESET_INTERVAL / 60000);
+      BT::startTask();
     }
   }
 
@@ -1918,6 +1896,7 @@ void networkInitTask(void *pvParameters) {
       Serial.printf("[网络任务] 🔻 网络配置失败，优雅降级%d分钟\n",
                     NETWORK_RETRY_RESET_INTERVAL / 60000);
       Serial.println("[网络任务] 系统将以离线模式运行，训练数据本地保存");
+      BT::startTask();
     } else {
       Serial.printf("[网络任务] 将在%d分钟后重试网络初始化\n",
                     (NETWORK_RETRY_RESET_INTERVAL / 60000) / 2);
@@ -2037,3 +2016,4 @@ void keyDetectionTask(void *pvParameters) {
     vTaskDelay(5 / portTICK_PERIOD_MS);
   }
 }
+

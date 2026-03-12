@@ -411,7 +411,8 @@ String generateTrainingDataJSON(int customStrokeCount) {
   double longitude = gnss.getLongitude();
   double strokeLat = imu.getLastStrokeEndLatitude();
   double strokeLon = imu.getLastStrokeEndLongitude();
-  // 如果获取到了有效的划桨位置（非0），则使用划桨位置
+
+  // 如果获取到了有效的划桨位置（非0），优先使用划桨位置
   if (strokeLat != 0.0 || strokeLon != 0.0) {
     latitude = strokeLat;
     longitude = strokeLon;
@@ -1441,6 +1442,7 @@ bool connectHybridSocketMQTT() {
   esp_task_wdt_reset();
   if (connectResult) {
     Serial.println("[MQTT] Connected");
+    BT::startTask();
     setMqttIconVisible(true);
     mqttRetryCount = 0;
     mqttGracefullyDegraded = false;
@@ -1453,6 +1455,7 @@ bool connectHybridSocketMQTT() {
     if (mqttRetryCount >= MAX_MQTT_RETRIES) {
       mqttGracefullyDegraded = true;
       mqttRetryStartTime = millis();
+      BT::startTask();
     }
     setMqttIconVisible(false);
     gMqttConnectBusy = false;
