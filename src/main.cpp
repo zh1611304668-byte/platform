@@ -1,4 +1,4 @@
-﻿#include "BluetoothManager.h"
+#include "BluetoothManager.h"
 #include "BrightnessManager.h"
 #include "CellularManager.h"
 #include "ConfigManager.h"
@@ -645,6 +645,7 @@ void loop() {
   if (networkTaskCompleted && !configManager.isConfigReady() &&
       (now - lastApiRetryTime > 10000) && !configLoadingInProgress) {
     loopObs.networkPollHits++;
+    imu.resetStrokeState();
     configLoadingInProgress = true;
     configManager.startConfigLoading();
     configLoadingInProgress = false;
@@ -655,51 +656,56 @@ void loop() {
     String cmd = Serial.readStringUntil('\n');
     cmd.trim();
 
-    if (cmd.startsWith("SETAPI=")) {
-      String address = cmd.substring(7);
+    bool isSetBaseUrlCmd = false;
+    String address;
+
+    if (cmd.startsWith("AT+SET_BASERL=")) {
+      isSetBaseUrlCmd = true;
+      address = cmd.substring(String("AT+SET_BASERL=").length());
+    } else if (cmd.startsWith("AT+SET_BASERL ")) {
+      isSetBaseUrlCmd = true;
+      address = cmd.substring(String("AT+SET_BASERL ").length());
+    }
+
+    if (isSetBaseUrlCmd) {
       address.trim();
 
-      Serial.println("\n[CMD] 收到地址更改请求: " + address);
+      Serial.println("\n[CMD] Received platform address update: " + address);
 
       if (configManager.getReloadPhase() != ConfigManager::RELOAD_IDLE) {
-        Serial.println("\n❌ 重载正在进行中，请稍后再试！\n");
+        Serial.println("\n[CMD] Reload is already in progress, please try again later.\n");
         return;
       }
 
-      // 检查当前是否处于"等待配置"状态（即Host为空）
       bool isWaitingForConfig = configManager.getPlatformHost().isEmpty();
 
       if (isWaitingForConfig) {
-        // 初始设置，直接调用 setPlatformAddress
         if (configManager.setPlatformAddress(address)) {
-          Serial.println("\n✅ 初始平台地址已设置，系统将自动开始加载配置\n");
+          Serial.println("\n[CMD] Initial platform address set. Config loading will start automatically.\n");
         } else {
-          Serial.println("\n❌ 地址设置失败，请检查格式 (IP:PORT)\n");
+          Serial.println("\n[CMD] Failed to set address, please check the format (IP:PORT).\n");
         }
         return;
       }
 
-      // 运行时重载
-      Serial.println("[CMD] 正在停止旧任务并重载地址...");
+      Serial.println("[CMD] Reloading platform address...");
 
       if (configManager.safeReloadPlatformAddress(address)) {
-        Serial.println("\n✅ 平台地址安全重载成功!");
-        Serial.println("系统已使用新地址重新获取配置\n");
+        Serial.println("\n[CMD] Platform address reloaded successfully.");
+        Serial.println("[CMD] Config has been refreshed with the new address.\n");
       } else {
-        Serial.println("\n❌ 平台地址重载失败!");
-        Serial.println("原因：地址格式错误、资源释放超时或PPP拨号失败");
-        Serial.println("请检查后重试\n");
+        Serial.println("\n[CMD] Platform address reload failed.");
+        Serial.println("[CMD] Please check the address format or network state and retry.\n");
       }
     } else if (cmd == "GETAPI") {
-      Serial.println("当前平台地址: " + configManager.getPlatformAddress());
+      Serial.println("Current platform address: " + configManager.getPlatformAddress());
     } else if (cmd == "HELP" || cmd == "help") {
-      Serial.println("\n===== 串口命令帮助 =====");
+      Serial.println("\n===== Serial Command Help =====");
       Serial.println(
-          "SETAPI=<IP:PORT>  - 设置平台地址 (例: SETAPI=117.83.111.19:10033)");
-      Serial.println("                    "
-                     "注：会自动停止MQTT/DataFlow，释放资源，重新拨号后恢复");
-      Serial.println("GETAPI            - 查询当前平台地址");
-      Serial.println("HELP              - 显示帮助信息");
+          "AT+SET_BASERL=<IP:PORT>  - Set platform address (example: AT+SET_BASERL=117.83.111.19:10033)");
+      Serial.println("                    Automatically stops MQTT/DataFlow, releases resources, and restores after reconnect.");
+      Serial.println("GETAPI            - Show current platform address");
+      Serial.println("HELP              - Show help");
       Serial.println("========================\n");
     }
   }

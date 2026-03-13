@@ -360,6 +360,19 @@ int IMUManager::getStrokeCount() const { return _strokeCount; }
 float IMUManager::getTotalDistance() const { return _totalDistance; }
 float IMUManager::getStrokeDistance() const { return _strokeDistance; }
 
+
+void IMUManager::resetStrokeState() {
+  _strokeRate = 0.0f;
+  _strokeState = STATE_BACKGROUND;
+  _recoveryCounter = 0;
+  _phaseStartTime = 0;
+  _peakMaxValue = 0.0f;
+  _peakMaxTime = 0;
+  _peakMaxFiltered = 0.0f;
+  _troughMinValue = 0.0f;
+  _troughMinTime = 0;
+  _troughMinFiltered = 0.0f;
+}
 void IMUManager::resetStrokeCount() {
   _strokeCount = 0;
   _hasInitialStrokePosition = false;

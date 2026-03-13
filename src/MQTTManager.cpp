@@ -1061,8 +1061,8 @@ bool runApiFetchStep(uint32_t timeoutMs, int maxRetries,
   if (configManager.getPlatformAddress().isEmpty() ||
       configManager.getPlatformAddress() == ":0") {
     Serial.println("[NET] 平台地址未配置，等待用户设置...");
-    Serial.println("[NET] 请使用串口命令: SETAPI=<IP:PORT>");
-    Serial.println("[NET] 示例: SETAPI=117.83.111.19:10033");
+    Serial.println("[NET] 请使用串口命令: AT+SET_BASERL=<IP:PORT>");
+    Serial.println("[NET] 示例: AT+SET_BASERL=117.83.111.19:10033");
 
     TickType_t waitStart = xTaskGetTickCount();
     const uint32_t maxWaitMs = 30000;
@@ -1090,7 +1090,7 @@ bool runApiFetchStep(uint32_t timeoutMs, int maxRetries,
         configManager.getPlatformAddress() == ":0") {
       Serial.println("[NET] 超时30秒仍未设置平台地址，跳过API获取");
       Serial.println(
-          "[NET] 系统将以离线模式运行，可在后续使用 SETAPI 命令配置");
+          "[NET] 系统将以离线模式运行，可在后续使用 AT+SET_BASERL 命令配置");
       return false;
     }
   }

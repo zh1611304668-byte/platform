@@ -118,6 +118,7 @@ public:
   float getStrokeRate() const; ///< 获取桨频(SPM)
   int getActiveAxis() const;   ///< 获取活跃轴(0:X, 1:Y, 2:Z)
   int getStrokeCount() const;  ///< 获取总桨数
+  void resetStrokeState();     ///< Reset current stroke state only
   void resetStrokeCount();     ///< 重置桨数
   /// @}
 

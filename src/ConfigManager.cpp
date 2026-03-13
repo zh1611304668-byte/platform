@@ -54,7 +54,7 @@ void ConfigManager::startConfigLoading() {
     return;
   }
 
-  // 如果平台地址为空,打印提示并返?,等待SETAPI命令
+  // 如果平台地址为空,打印提示并返?,等待AT+SET_BASERL命令
   if (platformHost.isEmpty() || platformPort == 0) {
     // 即使没有平台地址，也尝试加载NVS缓存
     if (!deviceConfig.isValid) {
@@ -1103,8 +1103,8 @@ void ConfigManager::loadPlatformAddressFromStorage() {
   prefs.end();
 
   if (platformHost.isEmpty() || platformPort == 0) {
-    Serial.println("[CONFIG] ⚠️  平台地址未配置，请使用SETAPI 命令设置");
-    Serial.println("[CONFIG] 示例: SETAPI=117.83.111.19:10033");
+    Serial.println("[CONFIG] ⚠️  平台地址未配置，请使用AT+SET_BASERL 命令设置");
+    Serial.println("[CONFIG] 示例: AT+SET_BASERL=117.83.111.19:10033");
   } else {
     Serial.printf("[CONFIG] 平台地址已加: %s:%d\n", platformHost.c_str(),
                   platformPort);
