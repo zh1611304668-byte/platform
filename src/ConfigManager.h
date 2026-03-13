@@ -68,6 +68,7 @@ private:
 
   String deviceIMEI;
 
+  String deviceICCID;
   String baselineDateTime = "";
   unsigned long baselineMillis = 0;
 
@@ -143,6 +144,8 @@ public:
 
   void setDeviceIMEI(const String &imei);
   String getDeviceIMEI() const;
+  void setDeviceICCID(const String &iccid);
+  String getDeviceICCID() const;
 
   bool setPlatformAddress(const String &address);
   String getPlatformAddress() const;

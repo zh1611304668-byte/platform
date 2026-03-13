@@ -699,11 +699,27 @@ void loop() {
       }
     } else if (cmd == "GETAPI") {
       Serial.println("Current platform address: " + configManager.getPlatformAddress());
+    } else if (cmd == "AT+QUERY_IMEI") {
+      String cachedImei = configManager.getDeviceIMEI();
+      if (cachedImei.isEmpty()) {
+        Serial.println("[IMEI] NOT_READY");
+      } else {
+        Serial.println("[IMEI] " + cachedImei);
+      }
+    } else if (cmd == "AT+QUERY_ICCID") {
+      String cachedIccid = configManager.getDeviceICCID();
+      if (cachedIccid.isEmpty()) {
+        Serial.println("[ICCID] NOT_READY");
+      } else {
+        Serial.println("[ICCID] " + cachedIccid);
+      }
     } else if (cmd == "HELP" || cmd == "help") {
       Serial.println("\n===== Serial Command Help =====");
       Serial.println(
           "AT+SET_BASERL=<IP:PORT>  - Set platform address (example: AT+SET_BASERL=117.83.111.19:10033)");
       Serial.println("                    Automatically stops MQTT/DataFlow, releases resources, and restores after reconnect.");
+      Serial.println("AT+QUERY_IMEI     - Show cached 4G module IMEI");
+      Serial.println("AT+QUERY_ICCID    - Show cached SIM ICCID");
       Serial.println("GETAPI            - Show current platform address");
       Serial.println("HELP              - Show help");
       Serial.println("========================\n");

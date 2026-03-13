@@ -852,6 +852,33 @@ bool init4GModule() {
                   imeiResponse.c_str());
   }
 
+  String iccidResponse;
+  if (sendATWithTrace("Read ICCID", "AT+QCCID", "OK", 3000, &iccidResponse)) {
+    int iccidStartIdx = iccidResponse.indexOf("\r\n") + 2;
+    int iccidEndIdx = iccidResponse.indexOf("\r\nOK");
+    if (iccidStartIdx > 1 && iccidEndIdx > iccidStartIdx) {
+      String deviceICCID = iccidResponse.substring(iccidStartIdx, iccidEndIdx);
+      deviceICCID.trim();
+      deviceICCID.replace("+QCCID:", "");
+      deviceICCID.replace("\"", "");
+      deviceICCID.replace("\r", "");
+      deviceICCID.replace("\n", "");
+      deviceICCID.trim();
+
+      if (!deviceICCID.isEmpty()) {
+        configManager.setDeviceICCID(deviceICCID);
+      } else {
+        Serial.printf("[NET][AT] Unexpected ICCID response: %s\n",
+                      iccidResponse.c_str());
+      }
+    } else {
+      Serial.printf("[NET][AT] ICCID parse indices invalid (resp=%s)\n",
+                    iccidResponse.c_str());
+    }
+  } else {
+    Serial.println("[NET][AT] ICCID read failed, continuing without cached ICCID");
+  }
+
   String simResponse;
   if (sendATWithTrace("SIM State", "AT+CPIN?", "OK", 1500, &simResponse)) {
     if (simResponse.indexOf("+CPIN: SIM PIN") != -1) {

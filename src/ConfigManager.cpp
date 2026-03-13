@@ -882,6 +882,13 @@ void ConfigManager::setDeviceIMEI(const String &imei) {
 
 String ConfigManager::getDeviceIMEI() const { return deviceIMEI; }
 
+void ConfigManager::setDeviceICCID(const String &iccid) {
+  deviceICCID = iccid;
+  Serial.printf("[CONFIG] Set ICCID: %s\n", iccid.c_str());
+}
+
+String ConfigManager::getDeviceICCID() const { return deviceICCID; }
+
 bool ConfigManager::setTimeFromNITZ(const String &nitzTimeStr) {
 
   if (nitzTimeStr.length() < 17) {
